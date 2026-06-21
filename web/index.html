@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="web-app-name" content="Nebula TV">
+  <meta name="application-name" content="Nebula TV">
+  <title>Nebula TV</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- HEADER -->
+    <header id="header">
+      <div class="logo-banner">
+        <img id="app-logo" src="nebula-logo.png" alt="Nebula TV" onerror="this.style.display='none'">
+        <span id="app-title">NEBULA TV</span>
+      </div>
+    </header>
+
+    <!-- VIDEO PLAYER -->
+    <section id="player-section">
+      <div id="video-frame">
+        <video id="player" controls autoplay playsinline webkit-playsinline></video>
+        <div id="player-overlay" class="overlay hidden">
+          <div class="spinner"></div>
+          <p id="overlay-message">🎬 Loading...</p>
+          <button id="retry-button" class="hidden">Retry</button>
+        </div>
+      </div>
+
+      <!-- Mini Info Panel -->
+      <div id="info-panel">
+        <h2 id="current-name">Select a channel</h2>
+        <div class="badge" id="current-category">IPTV Streamer</div>
+        <p id="current-description">Use arrow keys to browse</p>
+        <img id="current-logo" src="" alt="" style="display: none;">
+      </div>
+    </section>
+
+    <!-- CATEGORIES & CHANNELS -->
+    <main id="categories-container"></main>
+
+    <!-- Loader -->
+    <div id="loader" class="overlay">
+      <div class="spinner large"></div>
+      <h1 class="loader-title">NEBULA TV</h1>
+      <p id="loader-status">Loading channels...</p>
+      <p id="loader-progress" class="subtext"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

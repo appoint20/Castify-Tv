@@ -1,0 +1,3 @@
+/Users/shivm/Workspace/Nebula-Tv/android/app/.cxx/RelWithDebInfo/6f2v261d/arm64-v8a/CMakeFiles/appmodules.dir
+/Users/shivm/Workspace/Nebula-Tv/android/app/.cxx/RelWithDebInfo/6f2v261d/arm64-v8a/CMakeFiles/edit_cache.dir
+/Users/shivm/Workspace/Nebula-Tv/android/app/.cxx/RelWithDebInfo/6f2v261d/arm64-v8a/CMakeFiles/rebuild_cache.dir

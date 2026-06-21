@@ -1,0 +1,52 @@
+# ==========================================
+# Dependencies & Package Managers
+# ==========================================
+node_modules/
+.npm/
+.yarn/
+npm-debug.log*
+yarn-error.log*
+yarn-clean.log*
+
+# ==========================================
+# Build Outputs & Generated Assets
+# ==========================================
+builds/
+dist/
+build/
+*.ipk
+*.apk
+*.aab
+
+# ==========================================
+# Android Specific Exclusions
+# ==========================================
+# Captures all internal native compilation binaries
+**/android/bin/
+**/android/gen/
+**/android/out/
+**/android/.gradle/
+android/app/build/
+.gradle/
+captures/
+
+# ==========================================
+# IDE & System
+# ==========================================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+Thumbs.db
+.DS_Store
+
+# ==========================================
+# Environment Configuration
+# ==========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

@@ -1,0 +1,34 @@
+{
+  "name": "nebula-tv",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "start": "react-native start",
+    "test": "jest",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "tsc": "tsc --noEmit",
+    "web": "npx -y http-server web -p 8080",
+    "webos:setup": "ares-setup-device",
+    "webos:getkey": "ares-novacom --device lg-tv --getkey",
+    "webos:package": "ares-package web",
+    "webos:install": "ares-install --device lg-tv *.ipk"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-native": "npm:react-native-tvos@0.73.6-0",
+    "react-native-video": "^6.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@babel/preset-env": "^7.20.0",
+    "@babel/runtime": "^7.20.0",
+    "@react-native/babel-preset": "^0.73.0",
+    "@react-native/metro-config": "^0.73.0",
+    "@types/react": "^18.2.0",
+    "@types/react-native": "^0.73.0",
+    "@webos-tools/cli": "^3.2.4",
+    "typescript": "^5.1.3"
+  }
+}

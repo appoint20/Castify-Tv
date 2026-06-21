@@ -1,0 +1,198 @@
+import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ActivityIndicator,
+  SafeAreaView,
+  StatusBar,
+} from 'react-native';
+import { MediaEngineProvider } from './src/hooks/useMediaEngine';
+import { parseM3UAsync, ParseProgress } from './src/parsers/m3uParser';
+import { Channel, ChannelGroup } from './src/types/iptv';
+import { MainLayout } from './src/components/MainLayout';
+
+// Mock M3U Playlist containing real, open HLS streams for TV testing, along with a broken link to verify error recovery.
+const MOCK_PLAYLIST = `
+#EXTM3U
+#EXTINF:-1 tvg-id="DW_Deutsch" tvg-name="DW Deutsch" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Deutsche_Welle_logo.svg/320px-Deutsche_Welle_logo.svg.png" group-title="News",DW Deutsch (German News)
+https://dwamdstream102-lh.akamaihd.net/i/dwamd_de@403565/master.m3u8
+
+#EXTINF:-1 tvg-id="IndiaToday" tvg-name="India Today" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/India_Today_logo.svg/320px-India_Today_logo.svg.png" group-title="News",India Today Live (Indian News)
+https://lm-india-today.akamaized.net/hls/live/2009855/indiatoday/master.m3u8
+
+#EXTINF:-1 tvg-id="ZDF_Info" tvg-name="ZDF Info" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Zdf_info_logo.svg/320px-Zdf_info_logo.svg.png" group-title="History & Documentaries",ZDF Info (German Doc)
+https://zdf-hls-15.akamaized.net/hls/live/2019278/zdfinfo/master.m3u8
+
+#EXTINF:-1 tvg-id="DD_National" tvg-name="DD National" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Doordarshan_logo.svg/320px-Doordarshan_logo.svg.png" group-title="History & Documentaries",DD National Test (Indian Culture)
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+
+#EXTINF:-1 tvg-id="Netzkino" tvg-name="Netzkino Germany" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/a/ac/Netzkino_logo.png" group-title="Movies",Netzkino Germany (German HLS Movie)
+https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8
+
+#EXTINF:-1 tvg-id="IndianCinema" tvg-name="Indian Cinema" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Indian_Cinema_Logo.svg/320px-Indian_Cinema_Logo.svg.png" group-title="Movies",Indian Cinema Classic (Indian Movie)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+
+#EXTINF:-1 tvg-id="WDR_Music" tvg-name="WDR Fernsehen" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/WDR_logo.svg/320px-WDR_logo.svg.png" group-title="Music",WDR Fernsehen (German Music)
+https://wdr_fs_wdrtv.akamaized.net/hls/live/2020111/wdrtv/master.m3u8
+
+#EXTINF:-1 tvg-id="9XM" tvg-name="9XM Bollywood" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/9XM_logo.svg/320px-9XM_logo.svg.png" group-title="Music",9XM Bollywood Music (Indian Music)
+https://rts-live.yacast.net/rts_fm_300.m3u8
+`;
+
+const PLAYLISTS = [
+  { name: 'Germany', url: 'https://iptv-org.github.io/iptv/countries/de.m3u' },
+  { name: 'Austria', url: 'https://iptv-org.github.io/iptv/countries/at.m3u' },
+  { name: 'India', url: 'https://iptv-org.github.io/iptv/countries/in.m3u' }
+];
+
+export default function App() {
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [groupedCategories, setGroupedCategories] = useState<ChannelGroup[]>([]);
+  const [isParsing, setIsParsing] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState<string>('Initializing...');
+  const [parseProgress, setParseProgress] = useState<ParseProgress | null>(null);
+
+  useEffect(() => {
+    async function loadPlaylists() {
+      try {
+        const allChannels: Channel[] = [];
+        let hasLoadedAny = false;
+
+        for (const playlist of PLAYLISTS) {
+          try {
+            console.log(`[App] Fetching playlist: ${playlist.name} from ${playlist.url}`);
+            setLoadingStatus(`Downloading ${playlist.name} playlist...`);
+            
+            const response = await fetch(playlist.url);
+            if (!response.ok) {
+              throw new Error(`HTTP status ${response.status}`);
+            }
+            const content = await response.text();
+            
+            setLoadingStatus(`Parsing ${playlist.name} channels...`);
+            const parsed = await parseM3UAsync(
+              content,
+              (progress) => {
+                setParseProgress({
+                  processedLines: progress.processedLines,
+                  totalLines: progress.totalLines,
+                  channelCount: allChannels.length + progress.channelCount,
+                });
+              },
+              200 // Process in chunks of 200 to keep UI responsive
+            );
+            
+            // Annotate channels with their country origin and group title
+            const annotated = parsed.map(c => ({
+              ...c,
+              group: c.group && c.group !== 'Other' ? `${playlist.name} - ${c.group}` : `${playlist.name} - General`
+            }));
+            
+            allChannels.push(...annotated);
+            hasLoadedAny = true;
+          } catch (err) {
+            console.warn(`[App] Failed to load playlist ${playlist.name}:`, err);
+          }
+        }
+
+        // If all remote fetches failed (e.g. offline), use the mock fallback
+        if (!hasLoadedAny || allChannels.length === 0) {
+          console.log('[App] Offline or fetch failed, falling back to local playlist...');
+          setLoadingStatus('Offline: Loading local playlist...');
+          const parsed = await parseM3UAsync(
+            MOCK_PLAYLIST,
+            (progress) => {
+              setParseProgress(progress);
+            },
+            2
+          );
+          allChannels.push(...parsed);
+        }
+
+        // Sort parsed channels into categories
+        const categoryMap: Record<string, Channel[]> = {};
+        allChannels.forEach((chan) => {
+          const cat = chan.group || 'General';
+          if (!categoryMap[cat]) {
+            categoryMap[cat] = [];
+          }
+          categoryMap[cat].push(chan);
+        });
+
+        const sortedGroups: ChannelGroup[] = Object.keys(categoryMap)
+          .map((title) => ({
+            title,
+            channels: categoryMap[title],
+          }))
+          .sort((a, b) => b.channels.length - a.channels.length);
+
+        setChannels(allChannels);
+        setGroupedCategories(sortedGroups);
+        setIsParsing(false);
+      } catch (err) {
+        console.error('[App] Critical error in loadPlaylists:', err);
+        setIsParsing(false);
+      }
+    }
+
+    loadPlaylists();
+  }, []);
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <MediaEngineProvider>
+        {isParsing ? (
+          // Playlist loading state screen
+          <View style={styles.splashContainer}>
+            <ActivityIndicator size="large" color="#E50914" />
+            <Text style={styles.splashTitle}>Nebula TV</Text>
+            <Text style={styles.splashSubtitle}>
+              {loadingStatus}
+            </Text>
+            {parseProgress && (
+              <Text style={styles.splashDetails}>
+                Parsed {parseProgress.processedLines}/{parseProgress.totalLines} lines • Found {parseProgress.channelCount} Channels
+              </Text>
+            )}
+          </View>
+        ) : (
+          // Main Smart TV coordinator layout
+          <MainLayout categories={groupedCategories} />
+        )}
+      </MediaEngineProvider>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  splashContainer: {
+    flex: 1,
+    backgroundColor: '#141414',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splashTitle: {
+    color: '#E50914', // Netflix Red
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: 3,
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  splashSubtitle: {
+    color: '#E5E7EB',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  splashDetails: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 8,
+  },
+});

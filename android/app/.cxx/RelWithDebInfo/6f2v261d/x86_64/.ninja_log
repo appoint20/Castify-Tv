@@ -1,0 +1,11 @@
+# ninja log v5
+1	787	1782071692558169411	CMakeFiles/appmodules.dir/OnLoad.cpp.o	c5bb3b49d81303cb
+0	8	0	/Users/shivm/Workspace/Nebula-Tv/android/app/.cxx/RelWithDebInfo/6f2v261d/x86_64/CMakeFiles/cmake.verify_globs	374782c26e7d79fa
+787	831	1782071692603809572	/Users/shivm/Workspace/Nebula-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/6f2v261d/obj/x86_64/libappmodules.so	8456565a0d5f9c00
+0	4	0	clean	b1d7e1365a7272a0
+1	650	1782071692420995921	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Nebula-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	6104768481718a0e
+8	56	1782073847596809149	build.ninja	9e8034ff586328b4
+0	7	0	/Users/shivm/Workspace/Nebula-Tv/android/app/.cxx/RelWithDebInfo/6f2v261d/x86_64/CMakeFiles/cmake.verify_globs	374782c26e7d79fa
+1	672	1782073848300496829	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Nebula-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	6104768481718a0e
+1	806	1782073848432917430	CMakeFiles/appmodules.dir/OnLoad.cpp.o	c5bb3b49d81303cb
+806	853	1782073848481806134	/Users/shivm/Workspace/Nebula-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/6f2v261d/obj/x86_64/libappmodules.so	8456565a0d5f9c00
