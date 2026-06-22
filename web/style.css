@@ -324,6 +324,7 @@ body {
   overflow-y: auto;
   padding-bottom: 6vh;
   scrollbar-width: none; /* Hide Firefox scrollbars */
+  position: relative;
 }
 
 #categories-container::-webkit-scrollbar {
@@ -351,6 +352,7 @@ body {
   flex-direction: row;
   padding: 10px 5px;
   scrollbar-width: none;
+  position: relative;
 }
 
 .tiles-wrapper::-webkit-scrollbar {

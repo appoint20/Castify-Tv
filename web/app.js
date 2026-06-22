@@ -1,8 +1,7 @@
 const PLAYLISTS = [
   { name: 'Germany', url: 'https://iptv-org.github.io/iptv/countries/de.m3u' },
   { name: 'Austria', url: 'https://iptv-org.github.io/iptv/countries/at.m3u' },
-  { name: 'Hindi', url: 'https://iptv-org.github.io/iptv/languages/hin.m3u' },
-  { name: 'English', url: 'https://iptv-org.github.io/iptv/countries/us.m3u' }
+  { name: 'Hindi', url: 'https://iptv-org.github.io/iptv/languages/hin.m3u' }
 ];
 
 const BROKEN_URLS = [
@@ -353,6 +352,14 @@ function groupAndRender() {
   // 3. Populate group map
   if (activeFilter === 'Search') {
     groupedCategories['Search Results'] = filtered;
+  } else if (activeFilter === 'Favorites') {
+    filtered.forEach(channel => {
+      const category = `★ Favorites - ${channel.group || 'General'}`;
+      if (!groupedCategories[category]) {
+        groupedCategories[category] = [];
+      }
+      groupedCategories[category].push(channel);
+    });
   } else {
     filtered.forEach(channel => {
       const category = channel.group || 'General';
@@ -362,9 +369,18 @@ function groupAndRender() {
       groupedCategories[category].push(channel);
     });
 
-    // 4. Inject Favorites row at the absolute top if we have favorites and filter isn't set to Favorites
-    if (favoriteChannels.length > 0 && activeFilter !== 'Favorites') {
-      groupedCategories['★ Favorites'] = favoriteChannels;
+    // 4. Inject Favorites rows at the absolute top if we have favorites and filter isn't set to Favorites
+    if (favoriteChannels.length > 0) {
+      favoriteChannels.forEach(channel => {
+        const category = `★ Favorites - ${channel.group || 'General'}`;
+        if (!groupedCategories[category]) {
+          groupedCategories[category] = [];
+        }
+        // Avoid duplicate entries in the same category if it's already added
+        if (!groupedCategories[category].some(x => x.url === channel.url)) {
+          groupedCategories[category].push(channel);
+        }
+      });
     }
   }
 
@@ -395,17 +411,26 @@ function renderGrid() {
   focusMatrix = [];
   let rowIndex = 0;
 
-  // Render Favorites row first
-  if (groupedCategories['★ Favorites']) {
-    renderRow('★ Favorites', groupedCategories['★ Favorites'], rowIndex++);
-  }
+  // 1. Gather and sort all Favorites subcategories
+  const favCategories = Object.keys(groupedCategories)
+    .filter(cat => cat.startsWith('★ Favorites'))
+    .sort((a, b) => a.localeCompare(b));
 
-  // Sort other categories by size (largest first)
-  const sortedCategories = Object.keys(groupedCategories)
-    .filter(cat => cat !== '★ Favorites')
+  favCategories.forEach(categoryName => {
+    renderRow(categoryName, groupedCategories[categoryName], rowIndex++);
+  });
+
+  // 2. Sort and render other categories (largest first)
+  const otherCategories = Object.keys(groupedCategories)
+    .filter(cat => !cat.startsWith('★ Favorites') && cat !== 'Search Results')
     .sort((a, b) => groupedCategories[b].length - groupedCategories[a].length);
 
-  sortedCategories.forEach(categoryName => {
+  // If Search Results is present, render it first
+  if (groupedCategories['Search Results']) {
+    renderRow('Search Results', groupedCategories['Search Results'], rowIndex++);
+  }
+
+  otherCategories.forEach(categoryName => {
     renderRow(categoryName, groupedCategories[categoryName], rowIndex++);
   });
 }
@@ -529,18 +554,10 @@ function scrollToElement(parent, child, isHorizontal = true) {
   if (!parent || !child) return;
   if (isHorizontal) {
     const targetLeft = child.offsetLeft - (parent.clientWidth / 2) + (child.clientWidth / 2);
-    if (typeof parent.scrollTo === 'function') {
-      parent.scrollTo({ left: targetLeft, behavior: 'smooth' });
-    } else {
-      parent.scrollLeft = targetLeft;
-    }
+    parent.scrollLeft = targetLeft;
   } else {
     const targetTop = child.offsetTop - (parent.clientHeight / 2) + (child.clientHeight / 2);
-    if (typeof parent.scrollTo === 'function') {
-      parent.scrollTo({ top: targetTop, behavior: 'smooth' });
-    } else {
-      parent.scrollTop = targetTop;
-    }
+    parent.scrollTop = targetTop;
   }
 }
 
