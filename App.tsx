@@ -146,8 +146,8 @@ export default function App() {
         {isParsing ? (
           // Playlist loading state screen
           <View style={styles.splashContainer}>
-            <ActivityIndicator size="large" color="#E50914" />
-            <Text style={styles.splashTitle}>Nebula TV</Text>
+            <ActivityIndicator size="large" color="#33415c" />
+            <Text style={styles.splashTitle}>Castify TV</Text>
             <Text style={styles.splashSubtitle}>
               {loadingStatus}
             </Text>
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   splashTitle: {
-    color: '#E50914', // Netflix Red
+    color: '#33415c',
     fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 3,

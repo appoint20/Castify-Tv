@@ -1,5 +1,5 @@
 {
-  "name": "nebula-tv",
+  "name": "castify-tv",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -11,9 +11,12 @@
     "tsc": "tsc --noEmit",
     "web": "npx -y http-server web -p 8080",
     "webos:setup": "ares-setup-device",
-    "webos:getkey": "ares-novacom --device lg-tv --getkey",
+    "webos:getkey": "ares-novacom --device tv --getkey",
     "webos:package": "ares-package web",
-    "webos:install": "ares-install --device lg-tv *.ipk"
+    "webos:install": "ares-install --device tv *.ipk"
+  },
+  "overrides": {
+    "rimraf": "3.0.2"
   },
   "dependencies": {
     "react": "18.2.0",
@@ -29,6 +32,7 @@
     "@types/react": "^18.2.0",
     "@types/react-native": "^0.73.0",
     "@webos-tools/cli": "^3.2.4",
+    "rimraf": "3.0.2",
     "typescript": "^5.1.3"
   }
 }

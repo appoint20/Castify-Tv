@@ -1,13 +1,14 @@
 {
-  "id": "com.nebulatv.app",
-  "version": "1.0.0",
-  "vendor": "NebulaTV",
+  "id": "com.castifytv.app",
+  "version": "1.0.3",
+  "vendor": "CastifyTV",
   "type": "web",
   "main": "index.html",
-  "title": "Nebula TV",
+  "title": "Castify TV",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
   "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
   "requiredPermissions": [
     "internet"
   ]

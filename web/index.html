@@ -2,58 +2,94 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="web-app-name" content="Nebula TV">
-  <meta name="application-name" content="Nebula TV">
-  <title>Nebula TV</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Castify TV - Multi-OS IPTV Player</title>
+  <!-- Google Fonts: Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <!-- hls.js for HLS streaming support in browsers that don't natively support it (e.g. Chrome, Android) -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app-container">
-    <!-- HEADER -->
-    <header id="header">
-      <div class="logo-banner">
-        <img id="app-logo" src="nebula-logo.png" alt="Nebula TV" onerror="this.style.display='none'">
-        <span id="app-title">NEBULA TV</span>
+    <!-- Top Netflix-style Navigation Header -->
+    <nav id="top-nav">
+      <div id="logo"><img src="logo.png" alt="Castify TV" class="logo-img"></div>
+      <div id="nav-menu">
+        <div class="nav-item focused" data-filter="all">All</div>
+        <div class="nav-item" data-filter="Germany">Germany</div>
+        <div class="nav-item" data-filter="Austria">Austria</div>
+        <div class="nav-item" data-filter="Hindi">Hindi</div>
+        <div class="nav-item" data-filter="English">English</div>
+        <div class="nav-item" data-filter="Favorites">Favorites</div>
+        <div class="nav-item" data-filter="Search">🔍 Search</div>
       </div>
-    </header>
+      <div id="nav-help">Press <span class="key-badge">F</span> to Favorite | <span class="key-badge">D</span> to Hide</div>
+    </nav>
 
-    <!-- VIDEO PLAYER -->
-    <section id="player-section">
-      <div id="video-frame">
-        <video id="player" controls autoplay playsinline webkit-playsinline></video>
-        <div id="player-overlay" class="overlay hidden">
-          <div class="spinner"></div>
-          <p id="overlay-message">🎬 Loading...</p>
-          <button id="retry-button" class="hidden">Retry</button>
+    <!-- Top Dashboard Split-Screen Viewport -->
+    <header id="dashboard">
+      <!-- Left Panel: Channel Info Banner -->
+      <div id="channel-banner">
+        <div id="meta-content">
+          <div class="channel-header-row">
+            <img id="current-logo" src="" alt="" style="display: none;">
+            <div>
+              <h2 id="current-name">Welcome to Castify TV</h2>
+              <span id="current-category" class="badge">Dynamic IPTV Streamer</span>
+            </div>
+          </div>
+          <p id="current-description">Use your TV Remote D-Pad (Arrow Keys and Enter) or mouse to browse and play channels. Press the F key to bookmark a channel to your Favorites row.</p>
+        </div>
+        <div id="banner-actions">
+          <button id="favorite-toggle-btn" class="banner-btn">
+            <span class="star-icon">★</span> <span id="fav-btn-text">Add to Favorites</span>
+          </button>
+          <button id="hide-channel-btn" class="banner-btn">
+            <span class="hide-icon">✕</span> <span id="hide-btn-text">Hide Channel</span>
+          </button>
         </div>
       </div>
 
-      <!-- Mini Info Panel -->
-      <div id="info-panel">
-        <h2 id="current-name">Select a channel</h2>
-        <div class="badge" id="current-category">IPTV Streamer</div>
-        <p id="current-description">Use arrow keys to browse</p>
-        <img id="current-logo" src="" alt="" style="display: none;">
+      <!-- Right Panel: Video Frame -->
+      <div id="video-frame">
+        <video id="player" preload="auto" autoplay playsinline></video>
+        <!-- Overlay Loading State -->
+        <div id="player-overlay" class="overlay hidden">
+          <div class="spinner"></div>
+          <p id="overlay-message">Connecting to Stream...</p>
+        </div>
       </div>
-    </section>
+    </header>
 
-    <!-- CATEGORIES & CHANNELS -->
-    <main id="categories-container"></main>
-
-    <!-- Loader -->
+    <!-- Playlist Parsing Loader Screen -->
     <div id="loader" class="overlay">
       <div class="spinner large"></div>
-      <h1 class="loader-title">NEBULA TV</h1>
-      <p id="loader-status">Loading channels...</p>
+      <img src="logo.png" alt="Castify TV" class="loader-logo-img">
+      <p id="loader-status">Initializing dynamic playlist...</p>
       <p id="loader-progress" class="subtext"></p>
     </div>
+
+    <!-- Fullscreen Toast Overlay -->
+    <div id="fullscreen-toast">
+      <img id="toast-logo-img" class="toast-logo" src="" alt="">
+      <div class="toast-meta">
+        <span id="toast-channel-name" class="toast-name">Channel Name</span>
+        <span id="toast-channel-category" class="toast-category">Category</span>
+      </div>
+    </div>
+
+    <!-- Search Input Container (Shown only when Search filter is active) -->
+    <div id="search-container" class="hidden">
+      <input type="text" id="search-input" placeholder="Type channel name to search..." />
+    </div>
+
+    <!-- Netflix-Style Categories Grid Section -->
+    <main id="categories-container">
+      <!-- Generated dynamically in app.js -->
+    </main>
   </div>
 
   <script src="app.js"></script>
