@@ -119,3 +119,9 @@ dependencies {
 }
 
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+
+task copyWebAssets(type: Copy) {
+    from "${project.projectDir}/../../web"
+    into "${project.projectDir}/src/main/assets/web"
+}
+preBuild.dependsOn copyWebAssets
