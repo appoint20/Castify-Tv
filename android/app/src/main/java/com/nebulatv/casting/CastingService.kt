@@ -124,7 +124,7 @@ class CastingService : Service() {
         try {
             val inputStream = socket.getInputStream()
             val buffer = ByteArray(4096)
-            var bytesRead: Int
+            var bytesRead = 0
             while (isRunning && inputStream.read(buffer).also { bytesRead = it } != -1) {
                 // Intercept raw H.264 video streams or JPEG image buffers.
                 // In a full production implementation, this data would feed into a decoder pipeline.

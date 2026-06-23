@@ -79,7 +79,7 @@ android {
 
     namespace "com.nebulatv"
     defaultConfig {
-        applicationId "com.nebulatv"
+        applicationId "com.castifytv"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

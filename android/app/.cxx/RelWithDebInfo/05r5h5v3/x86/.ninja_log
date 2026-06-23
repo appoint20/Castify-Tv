@@ -1,0 +1,5 @@
+# ninja log v5
+0	8	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/x86/CMakeFiles/cmake.verify_globs	d46d655c0e09160e
+0	784	1782218276123063664	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	701b27835d708954
+0	954	1782218276291973383	CMakeFiles/appmodules.dir/OnLoad.cpp.o	53f0848a83c63c1e
+954	1002	1782218276341905308	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/x86/libappmodules.so	577314b5164cce64

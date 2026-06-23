@@ -114,7 +114,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           source={{
             uri: channel.url,
             headers: {
-              'User-Agent': 'NebulaTV/1.0 (Android TV; ExoPlayer)',
+              'User-Agent': 'CastifyTV/1.0 (Android TV; ExoPlayer)',
             },
             bufferConfig: {
               minBufferMs: 20000, // 20s minimum buffer required before playing

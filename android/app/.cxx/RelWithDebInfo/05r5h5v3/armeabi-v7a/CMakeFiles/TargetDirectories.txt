@@ -1,0 +1,3 @@
+/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/armeabi-v7a/CMakeFiles/appmodules.dir
+/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/armeabi-v7a/CMakeFiles/rebuild_cache.dir

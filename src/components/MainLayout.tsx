@@ -113,7 +113,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ categories }) => {
                 </View>
               ) : (
                 <View style={styles.emptyMetaWrapper}>
-                  <Text style={styles.emptyMetaTitle}>Nebula TV</Text>
+                  <Text style={styles.emptyMetaTitle}>Castify TV</Text>
                   <Text style={styles.emptyMetaSubtitle}>
                     Load a playlist to start watching
                   </Text>
