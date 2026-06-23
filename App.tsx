@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,11 +6,14 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
+  NativeModules,
 } from 'react-native';
 import { MediaEngineProvider } from './src/hooks/useMediaEngine';
 import { parseM3UAsync, ParseProgress } from './src/parsers/m3uParser';
 import { Channel, ChannelGroup } from './src/types/iptv';
 import { MainLayout } from './src/components/MainLayout';
+
+const { CastingModule } = NativeModules;
 
 // Mock M3U Playlist containing real, open HLS streams for TV testing, along with a broken link to verify error recovery.
 const MOCK_PLAYLIST = `
@@ -43,15 +46,31 @@ https://rts-live.yacast.net/rts_fm_300.m3u8
 const PLAYLISTS = [
   { name: 'Germany', url: 'https://iptv-org.github.io/iptv/countries/de.m3u' },
   { name: 'Austria', url: 'https://iptv-org.github.io/iptv/countries/at.m3u' },
-  { name: 'India', url: 'https://iptv-org.github.io/iptv/countries/in.m3u' }
+  { name: 'Hindi', url: 'https://iptv-org.github.io/iptv/languages/hin.m3u' }
 ];
 
 export default function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [groupedCategories, setGroupedCategories] = useState<ChannelGroup[]>([]);
   const [isParsing, setIsParsing] = useState(true);
-  const [loadingStatus, setLoadingStatus] = useState<string>('Initializing...');
-  const [parseProgress, setParseProgress] = useState<ParseProgress | null>(null);
+  const [favoriteUrls, setFavoriteUrls] = useState<string[]>([]);
+  const [hiddenUrls, setHiddenUrls] = useState<string[]>([]);
+
+  // Load saved favorites and hidden channels on mount
+  useEffect(() => {
+    async function loadSavedData() {
+      try {
+        if (CastingModule) {
+          const favs = await CastingModule.getFavorites();
+          const hids = await CastingModule.getHidden();
+          setFavoriteUrls(JSON.parse(favs));
+          setHiddenUrls(JSON.parse(hids));
+        }
+      } catch (e) {
+        console.warn('[App] Failed to load saved data:', e);
+      }
+    }
+    loadSavedData();
+  }, []);
 
   useEffect(() => {
     async function loadPlaylists() {
@@ -62,7 +81,6 @@ export default function App() {
         for (const playlist of PLAYLISTS) {
           try {
             console.log(`[App] Fetching playlist: ${playlist.name} from ${playlist.url}`);
-            setLoadingStatus(`Downloading ${playlist.name} playlist...`);
             
             const response = await fetch(playlist.url);
             if (!response.ok) {
@@ -70,16 +88,9 @@ export default function App() {
             }
             const content = await response.text();
             
-            setLoadingStatus(`Parsing ${playlist.name} channels...`);
             const parsed = await parseM3UAsync(
               content,
-              (progress) => {
-                setParseProgress({
-                  processedLines: progress.processedLines,
-                  totalLines: progress.totalLines,
-                  channelCount: allChannels.length + progress.channelCount,
-                });
-              },
+              () => {},
               200 // Process in chunks of 200 to keep UI responsive
             );
             
@@ -99,36 +110,68 @@ export default function App() {
         // If all remote fetches failed (e.g. offline), use the mock fallback
         if (!hasLoadedAny || allChannels.length === 0) {
           console.log('[App] Offline or fetch failed, falling back to local playlist...');
-          setLoadingStatus('Offline: Loading local playlist...');
           const parsed = await parseM3UAsync(
             MOCK_PLAYLIST,
-            (progress) => {
-              setParseProgress(progress);
-            },
+            () => {},
             2
           );
           allChannels.push(...parsed);
         }
 
-        // Sort parsed channels into categories
-        const categoryMap: Record<string, Channel[]> = {};
-        allChannels.forEach((chan) => {
-          const cat = chan.group || 'General';
-          if (!categoryMap[cat]) {
-            categoryMap[cat] = [];
+        // Inject guaranteed working channels for favorites
+        const injectedChannels: Channel[] = [
+          {
+            id: 'injected_9xm',
+            name: '9XM Music',
+            url: 'https://epiconvh.akamaized.net/live/9XM/master.m3u8',
+            group: 'Hindi - Music',
+            logo: 'https://static.wikia.nocookie.net/logopedia/images/4/4c/9XM_logo.png'
+          },
+          {
+            id: 'injected_zeemusic',
+            name: 'Zee Music',
+            url: 'https://f8e7y4c6.ssl.hwcdn.net/magic/playlist.m3u8',
+            group: 'Hindi - Music',
+            logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Zee_Music_Company_logo.png/320px-Zee_Music_Company_logo.png'
+          },
+          {
+            id: 'injected_b4umusic',
+            name: 'B4U Music',
+            url: 'https://cdnb4u.wiseplayout.com/B4U_Music/master.m3u8',
+            group: 'Hindi - Music',
+            logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a2/B4U_Music_logo.png'
           }
-          categoryMap[cat].push(chan);
+        ];
+
+        injectedChannels.forEach(chan => {
+          const exists = allChannels.some(c => c.url === chan.url || (c.name && c.name.toLowerCase() === chan.name.toLowerCase()));
+          if (!exists) {
+            allChannels.push(chan);
+          }
         });
 
-        const sortedGroups: ChannelGroup[] = Object.keys(categoryMap)
-          .map((title) => ({
-            title,
-            channels: categoryMap[title],
-          }))
-          .sort((a, b) => b.channels.length - a.channels.length);
+        // Pre-populate default favorites on first launch
+        if (CastingModule) {
+          const defaultsInitialized = await CastingModule.isDefaultsInitialized();
+          if (!defaultsInitialized) {
+            const defaultKeywords = ['9xm', 'zee music', 'b4u music', 'movies', 'favorit'];
+            const initialFavs: string[] = [];
+            allChannels.forEach(c => {
+              if (c.name && c.url) {
+                const lowerName = c.name.toLowerCase();
+                const matches = defaultKeywords.some(keyword => lowerName.includes(keyword));
+                if (matches && !initialFavs.includes(c.url)) {
+                  initialFavs.push(c.url);
+                }
+              }
+            });
+            await CastingModule.saveFavorites(JSON.stringify(initialFavs));
+            await CastingModule.setDefaultsInitialized();
+            setFavoriteUrls(initialFavs);
+          }
+        }
 
         setChannels(allChannels);
-        setGroupedCategories(sortedGroups);
         setIsParsing(false);
       } catch (err) {
         console.error('[App] Critical error in loadPlaylists:', err);
@@ -139,27 +182,91 @@ export default function App() {
     loadPlaylists();
   }, []);
 
+  const handleToggleFavorite = useCallback((url: string) => {
+    setFavoriteUrls((prev) => {
+      const next = prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url];
+      if (CastingModule) {
+        CastingModule.saveFavorites(JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const handleHideChannel = useCallback((url: string) => {
+    setHiddenUrls((prev) => {
+      const next = prev.includes(url) ? prev : [...prev, url];
+      if (CastingModule) {
+        CastingModule.saveHidden(JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  // Compute categorized groups dynamically
+  const groupedCategories = useMemo(() => {
+    // 0. Filter out hidden/deleted channels
+    const visibleChannels = channels.filter(c => !hiddenUrls.includes(c.url));
+
+    // 1. Separate favorites into their own list
+    const favoriteChannels = visibleChannels.filter(c => favoriteUrls.includes(c.url));
+
+    // 2. Sort visible channels into standard categories
+    const categoryMap: Record<string, Channel[]> = {};
+    visibleChannels.forEach((chan) => {
+      const cat = chan.group || 'General';
+      if (!categoryMap[cat]) {
+        categoryMap[cat] = [];
+      }
+      categoryMap[cat].push(chan);
+    });
+
+    const standardGroups: ChannelGroup[] = Object.keys(categoryMap)
+      .map((title) => ({
+        title,
+        channels: categoryMap[title],
+      }))
+      .sort((a, b) => b.channels.length - a.channels.length);
+
+    // 3. Create Favorites categories grouped by subcategory
+    const favCategoryMap: Record<string, Channel[]> = {};
+    favoriteChannels.forEach((chan) => {
+      const cat = `★ Favorites - ${chan.group || 'General'}`;
+      if (!favCategoryMap[cat]) {
+        favCategoryMap[cat] = [];
+      }
+      favCategoryMap[cat].push(chan);
+    });
+
+    const favGroups: ChannelGroup[] = Object.keys(favCategoryMap)
+      .map((title) => ({
+        title,
+        channels: favCategoryMap[title],
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+
+    // Combine them: favorites first, then standard groups
+    return [...favGroups, ...standardGroups];
+  }, [channels, favoriteUrls, hiddenUrls]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <MediaEngineProvider>
         {isParsing ? (
-          // Playlist loading state screen
+          // Clean loader screen: Spinner and App Title only
           <View style={styles.splashContainer}>
-            <ActivityIndicator size="large" color="#33415c" />
+            <ActivityIndicator size="large" color="#E50914" />
             <Text style={styles.splashTitle}>Castify TV</Text>
-            <Text style={styles.splashSubtitle}>
-              {loadingStatus}
-            </Text>
-            {parseProgress && (
-              <Text style={styles.splashDetails}>
-                Parsed {parseProgress.processedLines}/{parseProgress.totalLines} lines • Found {parseProgress.channelCount} Channels
-              </Text>
-            )}
           </View>
         ) : (
           // Main Smart TV coordinator layout
-          <MainLayout categories={groupedCategories} />
+          <MainLayout
+            categories={groupedCategories}
+            favoriteUrls={favoriteUrls}
+            hiddenUrls={hiddenUrls}
+            onToggleFavorite={handleToggleFavorite}
+            onHideChannel={handleHideChannel}
+          />
         )}
       </MediaEngineProvider>
     </SafeAreaView>
@@ -178,21 +285,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   splashTitle: {
-    color: '#33415c',
+    color: '#E5E7EB',
     fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 3,
     marginTop: 20,
-    marginBottom: 4,
-  },
-  splashSubtitle: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  splashDetails: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 8,
   },
 });

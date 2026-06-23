@@ -16,6 +16,10 @@ import { ChannelRow } from './ChannelRow';
 interface MainLayoutProps {
   /** Map of categorized channels */
   categories: ChannelGroup[];
+  favoriteUrls: string[];
+  hiddenUrls: string[];
+  onToggleFavorite: (url: string) => void;
+  onHideChannel: (url: string) => void;
 }
 
 /**
@@ -23,8 +27,14 @@ interface MainLayoutProps {
  * Implements a premium split-screen design (Banner + Video on top, rows on bottom).
  * Supports D-Pad controls for fullscreen toggles and hardware BACK button overrides.
  */
-export const MainLayout: React.FC<MainLayoutProps> = ({ categories }) => {
-  const { activeChannel, stopPlayback } = useMediaEngine();
+export const MainLayout: React.FC<MainLayoutProps> = ({
+  categories,
+  favoriteUrls,
+  hiddenUrls,
+  onToggleFavorite,
+  onHideChannel,
+}) => {
+  const { activeChannel, playChannel, stopPlayback } = useMediaEngine();
   
   // Track currently D-Pad focused channel to display details in the banner
   const [focusedChannel, setFocusedChannel] = useState<Channel | null>(null);
@@ -33,7 +43,45 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ categories }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenBtnFocused, setFullscreenBtnFocused] = useState(false);
 
-  // Set the first channel as focused initially if available
+  // Banner actions button focus state
+  const [favBtnFocused, setFavBtnFocused] = useState(false);
+  const [hideBtnFocused, setHideBtnFocused] = useState(false);
+
+  // Autoplay on startup prioritizing 9XM Bollywood, Zee Music, B4U Music, or first favorite
+  useEffect(() => {
+    if (categories.length > 0 && !activeChannel) {
+      let target: Channel | null = null;
+      
+      // Look in all categories for 9xm, zee music, b4u music
+      for (const group of categories) {
+        const found = group.channels.find(c => c.name && c.name.toLowerCase().includes('9xm'));
+        if (found) { target = found; break; }
+      }
+      if (!target) {
+        for (const group of categories) {
+          const found = group.channels.find(c => c.name && c.name.toLowerCase().includes('zee music'));
+          if (found) { target = found; break; }
+        }
+      }
+      if (!target) {
+        for (const group of categories) {
+          const found = group.channels.find(c => c.name && c.name.toLowerCase().includes('b4u music'));
+          if (found) { target = found; break; }
+        }
+      }
+      // Fallback to first channel of first row
+      if (!target && categories[0].channels.length > 0) {
+        target = categories[0].channels[0];
+      }
+      
+      if (target) {
+        playChannel(target);
+        setFocusedChannel(target);
+      }
+    }
+  }, [categories, activeChannel, playChannel]);
+
+  // Set the first channel as focused initially if available (safety fallback)
   useEffect(() => {
     if (categories.length > 0 && categories[0].channels.length > 0 && !focusedChannel) {
       setFocusedChannel(categories[0].channels[0]);
@@ -66,6 +114,45 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ categories }) => {
 
   const toggleFullscreen = () => {
     setIsFullscreen((prev) => !prev);
+  };
+
+  const handleHideActive = () => {
+    const targetChannel = focusedChannel || activeChannel || (categories[0]?.channels[0]);
+    if (!targetChannel) return;
+    
+    // Stop playback if the hidden channel is currently active
+    if (activeChannel && activeChannel.url === targetChannel.url) {
+      stopPlayback();
+    }
+    
+    onHideChannel(targetChannel.url);
+    
+    // Find next channel to focus
+    let nextChannel: Channel | null = null;
+    for (const group of categories) {
+      const idx = group.channels.findIndex(c => c.url === targetChannel.url);
+      if (idx !== -1) {
+        if (idx + 1 < group.channels.length) {
+          nextChannel = group.channels[idx + 1];
+        } else if (idx - 1 >= 0) {
+          nextChannel = group.channels[idx - 1];
+        }
+        break;
+      }
+    }
+    
+    if (nextChannel) {
+      setFocusedChannel(nextChannel);
+      playChannel(nextChannel);
+    } else {
+      const firstGroup = categories.find(g => g.channels.length > 0);
+      if (firstGroup) {
+        setFocusedChannel(firstGroup.channels[0]);
+        playChannel(firstGroup.channels[0]);
+      } else {
+        setFocusedChannel(null);
+      }
+    }
   };
 
   // Decide what channel info to display in the header banner
@@ -108,8 +195,38 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ categories }) => {
                     Category: {bannerChannel.group}
                   </Text>
                   <Text style={styles.bannerDescription}>
-                    Now playing live broadcast. Switch channels below by highlighting and pressing OK/Select on your D-pad controller.
+                    Now playing live broadcast. Press the buttons below to favorite or hide, or use the rows below to navigate.
                   </Text>
+                  
+                  {/* Banner Action Buttons */}
+                  <View style={styles.bannerActions}>
+                    <Pressable
+                      focusable={true}
+                      onFocus={() => setFavBtnFocused(true)}
+                      onBlur={() => setFavBtnFocused(false)}
+                      onPress={() => onToggleFavorite(bannerChannel.url)}
+                      style={[
+                        styles.actionButton,
+                        favBtnFocused && styles.actionButtonFocused,
+                      ]}
+                    >
+                      <Text style={styles.actionButtonText}>
+                        {favoriteUrls.includes(bannerChannel.url) ? '★ Remove Favorite' : '★ Add Favorite'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      focusable={true}
+                      onFocus={() => setHideBtnFocused(true)}
+                      onBlur={() => setHideBtnFocused(false)}
+                      onPress={handleHideActive}
+                      style={[
+                        styles.actionButton,
+                        hideBtnFocused && styles.actionButtonFocused,
+                      ]}
+                    >
+                      <Text style={styles.actionButtonText}>✕ Hide Channel</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ) : (
                 <View style={styles.emptyMetaWrapper}>
@@ -228,22 +345,46 @@ const styles = StyleSheet.create({
   },
   bannerChannelName: {
     color: '#FFFFFF',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 6,
+    marginBottom: 4,
     letterSpacing: 0.5,
   },
   bannerCategoryName: {
     color: '#E50914',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   bannerDescription: {
     color: '#9CA3AF',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     maxWidth: '90%',
+    marginBottom: 12,
+  },
+  bannerActions: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#262626',
+    borderRadius: 4,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  actionButtonFocused: {
+    borderColor: '#E50914',
+    backgroundColor: '#E50914',
+    transform: [{ scale: 1.05 }],
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   emptyMetaWrapper: {
     justifyContent: 'center',

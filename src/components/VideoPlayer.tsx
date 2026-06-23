@@ -117,10 +117,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               'User-Agent': 'CastifyTV/1.0 (Android TV; ExoPlayer)',
             },
             bufferConfig: {
-              minBufferMs: 20000, // 20s minimum buffer required before playing
-              maxBufferMs: 90000, // Max buffer caching up to 90s of video
-              bufferForPlaybackMs: 3000, // 3s initial buffer to start playback
-              bufferForPlaybackAfterRebufferMs: 10000, // 10s buffer required after a connection drop before resuming
+              minBufferMs: 5000, // 5s minimum buffer required before playing
+              maxBufferMs: 15000, // Max buffer caching up to 15s of video
+              bufferForPlaybackMs: 1000, // 1s initial buffer to start playback
+              bufferForPlaybackAfterRebufferMs: 2000, // 2s buffer required after a connection drop before resuming
             },
           }}
           key={`${channel.id}_v_${retryKey}`}
