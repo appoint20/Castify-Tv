@@ -1,4 +1,4 @@
-package com.nebulatv.casting
+package com.castifytv.casting
 
 import android.app.Service
 import android.content.Context

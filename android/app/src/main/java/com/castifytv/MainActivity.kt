@@ -1,4 +1,4 @@
-package com.nebulatv
+package com.castifytv
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

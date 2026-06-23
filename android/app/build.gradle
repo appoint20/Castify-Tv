@@ -77,7 +77,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.nebulatv"
+    namespace "com.castifytv"
     defaultConfig {
         applicationId "com.castifytv"
         minSdkVersion rootProject.ext.minSdkVersion

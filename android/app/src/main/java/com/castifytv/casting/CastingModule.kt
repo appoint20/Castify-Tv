@@ -1,4 +1,4 @@
-package com.nebulatv.casting
+package com.castifytv.casting
 
 import android.content.Intent
 import com.facebook.react.bridge.ReactApplicationContext

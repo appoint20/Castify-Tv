@@ -1,4 +1,4 @@
-package com.nebulatv.casting
+package com.castifytv.casting
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
