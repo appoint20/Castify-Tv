@@ -187,7 +187,6 @@ async function loadPlaylists() {
   const injectedChannels = [
     {
       name: '9XM Music',
-
       // Use the test-streams URL which is CORS-friendly and guaranteed to work on all TV platforms
       url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
       group: 'Hindi - Music',
@@ -195,14 +194,12 @@ async function loadPlaylists() {
     },
     {
       name: 'Zee Music',
-
       url: 'https://test-streams.mux.dev/test_001/stream.m3u8',
       group: 'Hindi - Music',
       logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Zee_Music_Company_logo.png/320px-Zee_Music_Company_logo.png'
     },
     {
       name: 'B4U Music',
-
       url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
       group: 'Hindi - Music',
       logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a2/B4U_Music_logo.png'
@@ -466,13 +463,18 @@ function getGradientForName(name) {
 function renderRow(categoryName, channels, rowIndex) {
   const container = document.getElementById('categories-container');
   
+  // Cap tiles per row to prevent TV WebView GPU memory exhaustion
+  const MAX_TILES_PER_ROW = 30;
+  const displayChannels = channels.length > MAX_TILES_PER_ROW ? channels.slice(0, MAX_TILES_PER_ROW) : channels;
+
   const rowDiv = document.createElement('div');
   rowDiv.className = 'category-row';
   rowDiv.id = `row-${rowIndex}`;
 
   const titleH2 = document.createElement('h2');
   titleH2.className = 'category-title';
-  titleH2.innerText = categoryName;
+  const countSuffix = channels.length > MAX_TILES_PER_ROW ? ` (${MAX_TILES_PER_ROW}+ of ${channels.length})` : '';
+  titleH2.innerText = categoryName + countSuffix;
   rowDiv.appendChild(titleH2);
 
   const tilesWrapper = document.createElement('div');
@@ -480,7 +482,7 @@ function renderRow(categoryName, channels, rowIndex) {
   
   const rowTiles = [];
 
-  channels.forEach((channel, colIndex) => {
+  displayChannels.forEach((channel, colIndex) => {
     const tile = document.createElement('div');
     tile.className = 'channel-tile';
     tile.dataset.rowIndex = rowIndex;
@@ -754,6 +756,7 @@ function playChannel(channel, isAutoplay = false) {
   }
 
   if (Hls.isSupported()) {
+    let hlsRetryCount = 0;
     hlsInstance = new Hls({
       enableWorker: true,
       maxBufferLength: 60,
@@ -766,6 +769,7 @@ function playChannel(channel, isAutoplay = false) {
     hlsInstance.loadSource(channel.url);
     hlsInstance.attachMedia(video);
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      hlsRetryCount = 0;
       video.play().catch(err => {
         console.warn('Playback block auto-play policy: ', err);
       });
@@ -773,13 +777,23 @@ function playChannel(channel, isAutoplay = false) {
     hlsInstance.on(Hls.Events.ERROR, (event, data) => {
       console.warn('Hls error details:', data);
       if (data.fatal) {
+        hlsRetryCount++;
+        // Give up after 3 retries to avoid infinite black-screen loops
+        if (hlsRetryCount > 3) {
+          console.error('Max HLS retries reached. Giving up on this stream.');
+          hlsInstance.destroy();
+          hlsInstance = null;
+          msg.innerText = `Unable to play "${channel.name}" — stream may be offline or blocked.`;
+          overlay.classList.remove('hidden');
+          return;
+        }
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
-            console.log('Fatal network error. Attempting to recover...');
+            console.log(`Fatal network error (attempt ${hlsRetryCount}/3). Attempting to recover...`);
             hlsInstance.startLoad();
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
-            console.log('Fatal media error. Attempting to recover...');
+            console.log(`Fatal media error (attempt ${hlsRetryCount}/3). Attempting to recover...`);
             hlsInstance.recoverMediaError();
             break;
           default:
