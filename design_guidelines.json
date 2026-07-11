@@ -1,0 +1,125 @@
+{
+  "theme": "dark",
+  "typography": {
+    "headings": {
+      "font_family": "Outfit, sans-serif",
+      "weights": [400, 700],
+      "sizes": {
+        "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight",
+        "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight",
+        "h3": "text-xl sm:text-2xl",
+        "h4": "text-lg sm:text-xl"
+      }
+    },
+    "body": {
+      "font_family": "Manrope, sans-serif",
+      "weights": [400, 500, 600],
+      "sizes": {
+        "base": "text-base",
+        "small": "text-sm",
+        "tiny": "text-xs uppercase tracking-[0.2em]"
+      }
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#141414",
+      "secondary": "#181818",
+      "surface": "#2F2F2F"
+    },
+    "accent": {
+      "primary": "#E50914",
+      "hover": "#F40612"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#B3B3B3",
+      "muted": "#808080"
+    },
+    "gradients": {
+      "hero_overlay": "bg-gradient-to-t from-[#141414] via-[#141414]/60 to-transparent",
+      "hero_overlay_horizontal": "bg-gradient-to-r from-[#141414] via-[#141414]/80 to-transparent"
+    }
+  },
+  "layouts": {
+    "hero": {
+      "type": "relative container with absolute positioned content",
+      "height": "h-[70vh] min-h-[500px]",
+      "alignment": "content anchored to bottom left",
+      "overlay": "Use both horizontal and vertical gradients over the image to ensure text readability and seamless blending into the page background."
+    },
+    "rails": {
+      "type": "horizontal scrolling flexbox",
+      "spacing": "gap-4",
+      "padding": "px-8 md:px-16",
+      "scrollbar": "hide scrollbar (scrollbar-width: none, ::-webkit-scrollbar { display: none })"
+    },
+    "cards": {
+      "aspect_ratio": "aspect-video (16:9)",
+      "border_radius": "rounded-md",
+      "transition": "transition-transform duration-300 ease-in-out hover:scale-105 hover:z-10 hover:shadow-xl"
+    },
+    "header": {
+      "type": "fixed w-full top-0 z-50",
+      "transition": "transparent background at top, solid #141414 background on scroll",
+      "padding": "px-8 md:px-16 py-4 flex justify-between items-center"
+    }
+  },
+  "components": {
+    "navbar": "Fixed header. Needs Search input (expandable), navigation links (Movies, Sports, Music, Hindi, German), and a distinct Toggle for 'German Channels' with a red active state.",
+    "channel_card": "16:9 ratio poster card. Must contain an image/logo of the channel or fallback. On hover, show play icon overlay, channel name, and category badge. Use subtle scale-up animation.",
+    "hero_banner": "Large featured channel or movie background. Includes the Channel Name in large typography, description, 'Watch Now' button (white with black text, or primary red).",
+    "video_player_modal": "Fullscreen modal containing the HLS.js player. Must have custom controls styled to match the dark cinematic theme (red progress bar, sleek icons).",
+    "loaders": "Skeleton loaders matching the 16:9 card aspect ratio in horizontal rails. A pulsing effect (`animate-pulse`) with `#2F2F2F` background.",
+    "empty_state": "If a category has no working channels, show a subtle message 'No channels available in this category' centered in the rail, with secondary text color.",
+    "german_toggle": "A clear, intuitive switch component in the header or settings menu. It must be styled to match the UI, turning red when active. Default state: ON."
+  },
+  "motion": {
+    "hover_states": "Hover states must use smooth transitions (duration 200-300ms). Scale up cards on hover.",
+    "page_load": "Fade in rails sequentially for a smooth loading experience.",
+    "modals": "Fade in and scale up slightly (0.95 to 1) for the video player modal."
+  },
+  "image_urls": {
+    "hero_movies": {
+      "url": "https://images.pexels.com/photos/3379932/pexels-photo-3379932.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Cinematic dark movie scene for the hero section background."
+    },
+    "hero_sports": {
+      "url": "https://images.pexels.com/photos/35898730/pexels-photo-35898730.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Dark stadium night scene for sports hero background."
+    },
+    "hero_music": {
+      "url": "https://images.pexels.com/photos/26447525/pexels-photo-26447525.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Dark live music concert scene for music hero background."
+    }
+  },
+  "accessibility": {
+    "contrast": "Ensure white text over images uses text-shadow or a dark gradient overlay. The red accent must pass WCAG AA for large text against the dark background.",
+    "focus": "Focus states should use a 2px solid white outline with a slight offset to be visible against the dark background."
+  },
+  "instructions_to_main_agent": [
+    "Build a React application with a dark theme mimicking Netflix's UI closely.",
+    "Install and use 'lucide-react' for icons (Play, Info, Search, X).",
+    "Use Tailwind CSS for styling. Set the background to '#141414' globally.",
+    "Implement the Header with a transparent-to-solid scroll effect. The header should contain navigation links, search, and a German channels toggle.",
+    "The 'German Channels' toggle must be ON by default.",
+    "Implement the Hero section taking up 70vh, with a large background image, a gradient overlay on the bottom and left, and a large title.",
+    "Channels should be displayed in horizontally scrolling rails (`overflow-x-auto` with hidden scrollbar), categorized by row (Movies, Sports, Music, Hindi, German).",
+    "Implement a generic 16:9 Card component for channels. On hover, it should scale up slightly (1.05x).",
+    "Use HLS.js for the live video player inside a full-screen modal.",
+    "When a stream URL is broken, the backend probes it and the frontend should hide it. Show skeleton loaders while data is fetching.",
+    "Do NOT use pure 'transparent' for elements that have content scrolling under them; use solid #141414.",
+    "Add 'data-testid' attributes to all interactive elements (buttons, links, toggles)."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Never use generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects carefully; for this Netflix clone, prefer solid dark backgrounds or gradient fades to black over heavy blurring.",
+    "You MUST NOT apply universal transition (e.g., transition: all). Add transitions for specific properties.",
+    "Do not add text-align: center to the main App container.",
+    "Always use modern button styles. The 'Play' button should be white with black text, bold, with a slight scale on hover.",
+    "Never use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations (hover, focus, active states).",
+    "Prioritize optical alignment over strict geometric alignment."
+  ]
+}
