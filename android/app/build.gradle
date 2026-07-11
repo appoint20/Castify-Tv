@@ -108,6 +108,10 @@ android {
 }
 
 dependencies {
+    // Fix for Android WebView Window Extensions ClassNotFoundException
+    implementation "androidx.window:window:1.2.0"
+    implementation "androidx.window.extensions.core:core:1.0.0"
+
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 

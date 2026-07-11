@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Castify TV - Multi-OS IPTV Player</title>
+  <title>CastifyTV — Premium Streaming</title>
   <!-- Google Fonts: Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,13 +16,13 @@
   <div id="app-container">
     <!-- Top Netflix-style Navigation Header -->
     <nav id="top-nav">
-      <div id="logo"><img src="logo.png" alt="Castify TV" class="logo-img"></div>
+      <div id="logo">Castify<span class="logo-accent">TV</span></div>
       <div id="nav-menu">
-        <div class="nav-item focused" data-filter="all">All</div>
+        <div class="nav-item focused active-filter" data-filter="all">Home</div>
         <div class="nav-item" data-filter="Germany">Germany</div>
         <div class="nav-item" data-filter="Austria">Austria</div>
         <div class="nav-item" data-filter="Hindi">Hindi</div>
-        <div class="nav-item" data-filter="Favorites">Favorites</div>
+        <div class="nav-item" data-filter="Favorites">My Favorites</div>
         <div class="nav-item" data-filter="Search">🔍 Search</div>
       </div>
       <div id="nav-help">Press <span class="key-badge">F</span> to Favorite | <span class="key-badge">D</span> to Hide</div>
@@ -36,15 +36,15 @@
           <div class="channel-header-row">
             <img id="current-logo" src="" alt="" style="display: none;">
             <div>
-              <h2 id="current-name">Welcome to Castify TV</h2>
-              <span id="current-category" class="badge">Dynamic IPTV Streamer</span>
+              <h2 id="current-name">Welcome to CastifyTV</h2>
+              <span id="current-category" class="badge">LIVE STREAM</span>
             </div>
           </div>
           <p id="current-description">Use your TV Remote D-Pad (Arrow Keys and Enter) or mouse to browse and play channels. Press the F key to bookmark a channel to your Favorites row.</p>
         </div>
         <div id="banner-actions">
           <button id="favorite-toggle-btn" class="banner-btn">
-            <span class="star-icon">★</span> <span id="fav-btn-text">Add to Favorites</span>
+            <span class="star-icon">★</span> <span id="fav-btn-text">My Favorites</span>
           </button>
           <button id="hide-channel-btn" class="banner-btn">
             <span class="hide-icon">✕</span> <span id="hide-btn-text">Hide Channel</span>
@@ -65,8 +65,8 @@
 
     <!-- Playlist Parsing Loader Screen -->
     <div id="loader" class="overlay">
+      <div class="loader-title">CastifyTV</div>
       <div class="spinner large"></div>
-      <img src="logo.png" alt="Castify TV" class="loader-logo-img">
       <p id="loader-status">Initializing dynamic playlist...</p>
       <p id="loader-progress" class="subtext"></p>
     </div>

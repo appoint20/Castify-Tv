@@ -23,9 +23,21 @@ interface MainLayoutProps {
 }
 
 /**
- * `<MainLayout />` acts as the master coordinator dashboard.
- * Implements a premium split-screen design (Banner + Video on top, rows on bottom).
- * Supports D-Pad controls for fullscreen toggles and hardware BACK button overrides.
+ * `<MainLayout />` is a pixel-faithful Netflix clone for Smart TV.
+ *
+ * Layout structure (Netflix TV app):
+ *  ┌─────────────────────────────────────────────────┐
+ *  │  NAV BAR (logo + menu items)                     │
+ *  ├──────────────────────────┬──────────────────────┤
+ *  │  LEFT (metadata banner)   │  RIGHT (video)       │
+ *  │  channel name, badges,    │  live stream player  │
+ *  │  description, actions     │                      │
+ *  ├──────────────────────────┴──────────────────────┤
+ *  │  ROWS (Netflix film-card rails)                 │
+ *  │  ► Popular • Favorites • News • Music ...       │
+ *  └─────────────────────────────────────────────────┘
+ *
+ * On startup: 9XM Music is auto-selected & playing on the right.
  */
 export const MainLayout: React.FC<MainLayoutProps> = ({
   categories,
@@ -36,23 +48,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const { activeChannel, playChannel, stopPlayback } = useMediaEngine();
   
-  // Track currently D-Pad focused channel to display details in the banner
   const [focusedChannel, setFocusedChannel] = useState<Channel | null>(null);
-  
-  // Track fullscreen mode
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenBtnFocused, setFullscreenBtnFocused] = useState(false);
-
-  // Banner actions button focus state
   const [favBtnFocused, setFavBtnFocused] = useState(false);
   const [hideBtnFocused, setHideBtnFocused] = useState(false);
 
-  // Autoplay on startup prioritizing 9XM Bollywood, Zee Music, B4U Music, or first favorite
+  // ─── Startup Autoplay: ALWAYS start with 9XM Music ───
   useEffect(() => {
     if (categories.length > 0 && !activeChannel) {
       let target: Channel | null = null;
       
-      // Look in all categories for 9xm, zee music, b4u music
       for (const group of categories) {
         const found = group.channels.find(c => c.name && c.name.toLowerCase().includes('9xm'));
         if (found) { target = found; break; }
@@ -69,7 +75,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           if (found) { target = found; break; }
         }
       }
-      // Fallback to first channel of first row
       if (!target && categories[0].channels.length > 0) {
         target = categories[0].channels[0];
       }
@@ -81,25 +86,25 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }
   }, [categories, activeChannel, playChannel]);
 
-  // Set the first channel as focused initially if available (safety fallback)
+  // Safety fallback
   useEffect(() => {
     if (categories.length > 0 && categories[0].channels.length > 0 && !focusedChannel) {
       setFocusedChannel(categories[0].channels[0]);
     }
   }, [categories, focusedChannel]);
 
-  // Intercept D-Pad BACK button to exit fullscreen mode or stop playback
+  // ─── D-Pad BACK button ───
   useEffect(() => {
     const handleBackButton = () => {
       if (isFullscreen) {
         setIsFullscreen(false);
-        return true; // Prevent default back action
+        return true;
       }
       if (activeChannel) {
         stopPlayback();
-        return true; // Handled
+        return true;
       }
-      return false; // Let OS handle app exit
+      return false;
     };
 
     BackHandler.addEventListener('hardwareBackPress', handleBackButton);
@@ -120,14 +125,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     const targetChannel = focusedChannel || activeChannel || (categories[0]?.channels[0]);
     if (!targetChannel) return;
     
-    // Stop playback if the hidden channel is currently active
     if (activeChannel && activeChannel.url === targetChannel.url) {
       stopPlayback();
     }
     
     onHideChannel(targetChannel.url);
     
-    // Find next channel to focus
     let nextChannel: Channel | null = null;
     for (const group of categories) {
       const idx = group.channels.findIndex(c => c.url === targetChannel.url);
@@ -155,16 +158,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }
   };
 
-  // Decide what channel info to display in the header banner
   const bannerChannel = focusedChannel || activeChannel || (categories[0]?.channels[0]);
 
   return (
     <View style={styles.container}>
       {isFullscreen && activeChannel ? (
-        // Fullscreen Mode
+        // ─── Fullscreen Mode ───
         <View style={StyleSheet.absoluteFill}>
           <VideoPlayer channel={activeChannel} />
-          {/* Subtle floating overlay to guide TV users */}
           <View style={styles.fullscreenOverlay}>
             <Text style={styles.fullscreenOverlayText}>
               Press BACK on your remote to exit Fullscreen
@@ -172,9 +173,21 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           </View>
         </View>
       ) : (
-        // Dashboard Mode (Split Screen)
+        // ─── Netflix Dashboard ───
         <View style={styles.dashboardContainer}>
-          {/* Top Panel (Banner + Player) */}
+          {/* Top Navigation Bar (Netflix style) */}
+          <View style={styles.navBar}>
+            <Text style={styles.navLogo}>Castify<Text style={styles.navLogoAccent}>TV</Text></Text>
+            <View style={styles.navMenu}>
+              <Text style={[styles.navItem, styles.navItemActive]}>Home</Text>
+              <Text style={styles.navItem}>Channels</Text>
+              <Text style={styles.navItem}>Favorites</Text>
+              <Text style={styles.navItem}>Movies</Text>
+              <Text style={styles.navItem}>Music</Text>
+            </View>
+          </View>
+
+          {/* Hero Split-Screen: Banner (left) + Video (right) */}
           <View style={styles.topPanel}>
             {/* Left: Metadata Banner */}
             <View style={styles.bannerContainer}>
@@ -182,7 +195,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 <View style={styles.metaWrapper}>
                   <View style={styles.badgeRow}>
                     <View style={styles.liveBadge}>
-                      <Text style={styles.liveBadgeText}>LIVE</Text>
+                      <Text style={styles.liveBadgeText}>● LIVE</Text>
                     </View>
                     <View style={styles.hdBadge}>
                       <Text style={styles.hdBadgeText}>FHD 1080P</Text>
@@ -192,10 +205,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     {bannerChannel.name}
                   </Text>
                   <Text style={styles.bannerCategoryName}>
-                    Category: {bannerChannel.group}
+                    {bannerChannel.group}
                   </Text>
-                  <Text style={styles.bannerDescription}>
-                    Now playing live broadcast. Press the buttons below to favorite or hide, or use the rows below to navigate.
+                  <Text style={styles.bannerDescription} numberOfLines={3}>
+                    Now playing live broadcast. Use the D-Pad to browse channels below and press OK to watch.
                   </Text>
                   
                   {/* Banner Action Buttons */}
@@ -211,7 +224,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                       ]}
                     >
                       <Text style={styles.actionButtonText}>
-                        {favoriteUrls.includes(bannerChannel.url) ? '★ Remove Favorite' : '★ Add Favorite'}
+                        {favoriteUrls.includes(bannerChannel.url) ? '✓ My Favorites' : '+ My Favorites'}
                       </Text>
                     </Pressable>
                     <Pressable
@@ -221,6 +234,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                       onPress={handleHideActive}
                       style={[
                         styles.actionButton,
+                        styles.actionButtonSecondary,
                         hideBtnFocused && styles.actionButtonFocused,
                       ]}
                     >
@@ -230,7 +244,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 </View>
               ) : (
                 <View style={styles.emptyMetaWrapper}>
-                  <Text style={styles.emptyMetaTitle}>Castify TV</Text>
+                  <Text style={styles.emptyMetaTitle}>CastifyTV</Text>
                   <Text style={styles.emptyMetaSubtitle}>
                     Load a playlist to start watching
                   </Text>
@@ -244,7 +258,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 <View style={styles.playerWrapper}>
                   <VideoPlayer channel={activeChannel} />
                   
-                  {/* Floating Video Action Controls (D-pad accessible) */}
+                  {/* Floating Fullscreen Control (D-pad accessible) */}
                   <Pressable
                     focusable={true}
                     onFocus={() => setFullscreenBtnFocused(true)}
@@ -255,7 +269,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                       fullscreenBtnFocused && styles.controlButtonFocused,
                     ]}
                   >
-                    <Text style={styles.controlButtonText}>🖵 Go Fullscreen</Text>
+                    <Text style={styles.controlButtonText}>⛶ Fullscreen</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -269,7 +283,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             </View>
           </View>
 
-          {/* Bottom Panel: Vertical Row Categories */}
+          {/* Netflix-Style Category Rows */}
           <ScrollView
             style={styles.bottomPanel}
             contentContainerStyle={styles.bottomPanelContent}
@@ -294,122 +308,168 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141414', // Deep graphite Netflix background
+    backgroundColor: '#141414', // Netflix deep charcoal
   },
   dashboardContainer: {
     flex: 1,
   },
+  
+  // ─── Top Navigation Bar (Netflix) ───
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    marginTop: 8, // Breathing room from the top edge of the screen
+    paddingHorizontal: 20,
+    backgroundColor: '#141414',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  navLogo: {
+    color: '#E50914', // Netflix Red
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  navLogoAccent: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  navMenu: {
+    flexDirection: 'row',
+    marginLeft: 32,
+  },
+  navItem: {
+    color: '#737373', // Netflix gray
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 24,
+  },
+  navItemActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  
+  // ─── Hero Split-Screen ───
   topPanel: {
-    height: '42%',
+    height: '28%',
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#262626',
-    backgroundColor: '#0c0c0c',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#0a0a0a',
   },
   bannerContainer: {
-    flex: 5, // 50% width
+    flex: 5, // 50%
     justifyContent: 'center',
-    padding: 24,
+    padding: 16,
   },
   metaWrapper: {
     justifyContent: 'center',
   },
   badgeRow: {
     flexDirection: 'row',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   liveBadge: {
     backgroundColor: '#E50914',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 3,
-    marginRight: 8,
+    marginRight: 6,
   },
   liveBadgeText: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   hdBadge: {
     borderWidth: 1,
-    borderColor: '#9CA3AF',
+    borderColor: '#737373',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 3,
   },
   hdBadgeText: {
-    color: '#9CA3AF',
-    fontSize: 9,
+    color: '#737373',
+    fontSize: 8,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   bannerChannelName: {
     color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     marginBottom: 4,
-    letterSpacing: 0.5,
+    letterSpacing: -0.3,
   },
   bannerCategoryName: {
     color: '#E50914',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+    letterSpacing: 0.3,
   },
   bannerDescription: {
-    color: '#9CA3AF',
+    color: '#737373',
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 15,
     maxWidth: '90%',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   bannerActions: {
     flexDirection: 'row',
-    marginTop: 6,
+    marginTop: 2,
   },
   actionButton: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#262626',
+    paddingVertical: 7,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 4,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#404040',
+    marginRight: 8,
+    borderWidth: 0,
+  },
+  actionButtonSecondary: {
+    backgroundColor: 'rgba(109,109,110,0.5)',
   },
   actionButtonFocused: {
-    borderColor: '#E50914',
-    backgroundColor: '#E50914',
+    borderColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
     transform: [{ scale: 1.05 }],
   },
   actionButtonText: {
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   emptyMetaWrapper: {
     justifyContent: 'center',
   },
   emptyMetaTitle: {
     color: '#E50914',
-    fontSize: 32,
-    fontWeight: 'bold',
+
+    fontSize: 24,
+    fontWeight: '900',
     letterSpacing: 2,
   },
   emptyMetaSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    marginTop: 8,
+    color: '#737373',
+
+
+    fontSize: 13,
+    marginTop: 6,
   },
   playerContainer: {
-    flex: 5, // 50% width
+    flex: 5, // 50%
     backgroundColor: '#000000',
     borderLeftWidth: 1,
-    borderLeftColor: '#262626',
+    borderLeftColor: 'rgba(255,255,255,0.06)',
   },
   playerWrapper: {
     flex: 1,
     justifyContent: 'flex-end',
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   noActiveStream: {
     flex: 1,
@@ -419,44 +479,47 @@ const styles = StyleSheet.create({
     backgroundColor: '#080808',
   },
   noActiveStreamText: {
-    color: '#D1D5DB',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#737373',
+    fontSize: 18,
+    fontWeight: '700',
     marginBottom: 6,
   },
   noActiveStreamSubtext: {
     color: '#4B5563',
-    fontSize: 11,
+    fontSize: 12,
     textAlign: 'center',
   },
   controlButton: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    bottom: 12,
+    right: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#404040',
+    borderColor: 'rgba(255,255,255,0.3)',
     zIndex: 20,
   },
   controlButtonFocused: {
-    borderColor: '#E50914',
-    backgroundColor: '#E50914',
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     transform: [{ scale: 1.05 }],
   },
   controlButtonText: {
     color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '700',
   },
+  
+  // ─── Netflix Category Rows ───
   bottomPanel: {
-    height: '58%',
+    flex: 1,
     backgroundColor: '#141414',
   },
   bottomPanelContent: {
-    paddingVertical: 12,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
   fullscreenOverlay: {
     position: 'absolute',

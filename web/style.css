@@ -7,7 +7,7 @@
 
 body {
   font-family: 'Outfit', sans-serif;
-  background-color: #0b0f19;
+  background: #141414; /* Netflix charcoal */
   color: #e9ecef;
   overflow-x: hidden;
   height: 100vh;
@@ -19,66 +19,72 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 2vh 2vw;
+  padding: 0;
   overflow: hidden;
 }
 
-/* Top Navigation Bar */
+/* ─── Top Navigation Bar (Netflix) ─── */
 #top-nav {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  height: 12vh;
-  margin-bottom: 2vh;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  height: 48px;
+  padding: 0 4vw;
+  margin-top: 12px; /* Breathing room from the top edge of the screen */
+  background: #141414;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
 #logo {
-  font-size: 2.2rem;
-  font-weight: 800;
-  letter-spacing: 3px;
-  color: #ffffff;
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #E50914; /* Netflix Red */
+  display: flex;
+  align-items: center;
 }
 
-.red-text {
-  color: #33415c;
+.logo-accent {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 900;
+  margin-left: 2px;
 }
 
 #nav-menu {
   display: flex;
   flex-direction: row;
-  margin-left: 4vw;
-  margin-right: auto;
+  margin-left: 3vw;
 }
 
 .nav-item {
   margin-right: 1.5vw;
-  padding: 8px 24px;
-  font-size: 1.4rem;
+  padding: 4px 12px;
+  font-size: 1rem;
   font-weight: 600;
-  color: #9ca3af;
+  color: #737373; /* Netflix gray */
   border: 2px solid transparent;
-  border-radius: 20px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav-item.focused {
   color: #ffffff;
-  border-color: #33415c;
-  background-color: rgba(51, 65, 92, 0.35);
+  border-color: rgba(255, 255, 255, 0.5);
+  background-color: rgba(255, 255, 255, 0.1);
   transform: scale(1.05);
 }
 
 .nav-item.active-filter {
   color: #ffffff;
-  background-color: #33415c;
+  font-weight: 700;
 }
 
 #nav-help {
-  font-size: 1.25rem;
+  margin-left: auto;
+  font-size: 0.85rem;
   color: #6b7280;
   display: flex;
   align-items: center;
@@ -94,27 +100,26 @@ body {
   border: 1px solid #444;
 }
 
-/* Dashboard Split-Screen Viewport */
+/* ─── Hero Split-Screen ─── */
 #dashboard {
   display: flex;
   flex-direction: row;
-  height: 42vh;
-  margin-bottom: 3vh;
+  height: 26vh;
+  min-height: 150px;
+  margin-bottom: 0;
   flex-shrink: 0;
 }
 
 /* Left Panel: Channel Info Banner */
 #channel-banner {
-  width: 42%;
-  margin-right: 3%;
-  background: linear-gradient(135deg, rgba(20, 20, 20, 0.85) 0%, rgba(10, 10, 10, 0.95) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 3vh 2vw;
+  width: 50%;
+  background: #0a0a0a;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 2vh 2vw;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  backdrop-filter: blur(10px);
+  justify-content: center;
+  overflow: hidden;
 }
 
 #meta-content {
@@ -126,83 +131,84 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-bottom: 2vh;
+  margin-bottom: 1vh;
 }
 
 #current-logo {
-  height: 12vh;
+  height: 5vh;
   width: auto;
-  max-width: 160px;
+  max-width: 80px;
   object-fit: contain;
   background: rgba(255, 255, 255, 0.08);
-  padding: 8px;
-  border-radius: 8px;
-  margin-right: 1.5vw;
+  padding: 5px;
+  border-radius: 5px;
+  margin-right: 1vw;
 }
 
 #current-name {
-  font-size: 3.2rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 35vw;
-  margin-bottom: 5px;
+  max-width: 28vw;
+  margin-bottom: 3px;
+  letter-spacing: -0.3px;
 }
 
 .badge {
   display: inline-block;
-  background-color: #33415c;
-  color: #e9ecef;
-  padding: 5px 12px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  border-radius: 4px;
-  margin-top: 6px;
+  background: #E50914;
+  color: #ffffff;
+  padding: 2px 8px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  border-radius: 3px;
+  margin-top: 3px;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  letter-spacing: 0.5px;
 }
 
 #current-description {
-  font-size: 1.25rem;
-  line-height: 1.6;
-  color: #d1d5db;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #737373; /* Netflix gray */
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-top: 0.5vh;
+  max-width: 90%;
 }
 
 #banner-actions {
-  margin-top: 2vh;
+  margin-top: 1vh;
   display: flex;
   flex-direction: row;
 }
 
 #banner-actions .banner-btn {
-  margin-right: 15px;
+  margin-right: 12px;
 }
 
 .hide-icon {
   margin-right: 8px;
   font-size: 1.1rem;
-  color: #9ca3af;
 }
 
 .banner-btn.focused .hide-icon {
-  color: #ffffff;
+  color: #141414;
 }
 
 .banner-btn {
-  padding: 12px 28px;
-  background-color: rgba(255, 255, 255, 0.08);
+  padding: 7px 16px;
+  background-color: rgba(255, 255, 255, 0.15);
   border: 2px solid transparent;
-  border-radius: 6px;
+  border-radius: 4px;
   color: #ffffff;
-  font-weight: 600;
-  font-size: 1.25rem;
+  font-weight: 700;
+  font-size: 0.85rem;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -213,21 +219,22 @@ body {
 .star-icon {
   margin-right: 8px;
   font-size: 1.1rem;
-  color: #9ca3af;
+  color: #737373;
 }
 
 .banner-btn.focused {
-  border-color: #33415c;
-  background-color: rgba(51, 65, 92, 0.35);
+  border-color: #ffffff;
+  background-color: #ffffff;
+  color: #141414;
   transform: scale(1.03);
 }
 
 .banner-btn.focused .star-icon {
-  color: #ffffff;
+  color: #141414;
 }
 
 .banner-btn.is-favorite {
-  background-color: #33415c;
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 .banner-btn.is-favorite .star-icon {
@@ -236,19 +243,31 @@ body {
 
 /* Right Panel: Video Frame */
 #video-frame {
-  width: 55%;
+  width: 50%;
   background-color: #000000;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
 }
 
 #player {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background-color: #000000;
+}
+
+/* Hide Android WebView default play overlay controls */
+#player::-webkit-media-controls {
+  display: none !important;
+}
+#player::-webkit-media-controls-play-button {
+  display: none !important;
+}
+#player::-webkit-media-controls-start-playback-button {
+  display: none !important;
+}
+#player::-webkit-media-controls-panel {
+  display: none !important;
 }
 
 /* Overlays & Loading Spinners */
@@ -278,7 +297,7 @@ body {
   width: 40px;
   height: 40px;
   border: 4px solid rgba(255, 255, 255, 0.1);
-  border-left-color: #33415c;
+  border-left-color: #E50914; /* Netflix Red */
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -296,14 +315,14 @@ body {
 
 #loader {
   position: fixed;
-  background-color: #080808;
+  background-color: #141414;
 }
 
 .loader-title {
   font-size: 3.5rem;
-  font-weight: 800;
-  letter-spacing: 6px;
-  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #E50914;
   margin-bottom: 2vh;
 }
 
@@ -318,39 +337,39 @@ body {
   margin-top: 1.5vh;
 }
 
-/* Netflix-Style Categories Grid */
+/* ─── Netflix-Style Category Rows ─── */
 #categories-container {
   flex-grow: 1;
   overflow-y: auto;
-  padding-bottom: 6vh;
-  scrollbar-width: none; /* Hide Firefox scrollbars */
+  padding: 2vh 0 6vh 0;
+  scrollbar-width: none;
   position: relative;
 }
 
 #categories-container::-webkit-scrollbar {
-  display: none; /* Hide Chrome/Safari scrollbars */
+  display: none;
 }
 
 .category-row {
-  margin-bottom: 4vh;
+  margin-bottom: 2.5vh;
   display: flex;
   flex-direction: column;
 }
 
 .category-title {
-  font-size: 1.35rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 800;
   color: #ffffff;
-  padding-left: 0.5vw;
-  margin-bottom: 1.5vh;
-  letter-spacing: 0.5px;
+  padding-left: 1.5vw;
+  margin-bottom: 1vh;
+  letter-spacing: 0.3px;
 }
 
 .tiles-wrapper {
   overflow-x: auto;
   display: flex;
   flex-direction: row;
-  padding: 10px 5px;
+  padding: 14px 1vw;
   scrollbar-width: none;
   position: relative;
 }
@@ -359,37 +378,36 @@ body {
   display: none;
 }
 
-/* Netflix Vertical Poster Cards */
+/* ─── Netflix Portrait Film Card ─── */
 .channel-tile {
   flex-shrink: 0;
-  width: 170px;
-  height: 240px;
-  margin-right: 20px; /* Space between tiles replacing flex gap */
-  background-color: #121212;
-  border: 2px solid #222222;
-  border-radius: 8px;
+  width: 160px;
+  height: 230px; /* ~2:3 portrait poster ratio */
+  margin-right: 10px;
+  background-color: #1a1a1a;
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   cursor: pointer;
   position: relative;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
-.tile-logo-wrapper {
-  height: 170px;
+.tile-poster-area {
+  flex: 1;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #181818;
-  padding: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  transition: background-color 0.2s;
+  padding: 16px 12px;
+  position: relative;
+  overflow: hidden;
 }
 
 .tile-logo {
-  max-height: 120px;
+  max-height: 80px;
   max-width: 100%;
   object-fit: contain;
 }
@@ -400,80 +418,75 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1b2230 0%, #0b0f19 100%);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  color: #33415c; /* Castify TV Slate initials */
-  font-size: 2.2rem;
-  font-weight: 800;
-  letter-spacing: 2px;
-  text-shadow: 0 4px 10px rgba(51, 65, 92, 0.4);
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-.logo-img {
-  height: 10vh;
-  width: auto;
-  object-fit: contain;
-}
-
-.loader-logo-img {
-  width: 500px;
-  height: auto;
-  object-fit: contain;
-  margin-bottom: 4vh;
-  animation: pulse 2s infinite ease-in-out;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50% { transform: scale(1.05); opacity: 1; }
-}
-
-.tile-info {
-  height: 66px;
-  width: 100%;
+/* Playing badge for active channel */
+.tile-playing-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #E50914;
+  color: #ffffff;
+  padding: 3px 7px;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border-radius: 3px;
+  z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background-color: #1c1c1c;
-  padding: 5px 12px;
+}
+
+.tile-playing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+  margin-right: 4px;
+}
+
+/* Bottom title overlay */
+.tile-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 10px 12px 10px;
+  background: rgba(0, 0, 0, 0.75);
   text-align: center;
-  transition: background-color 0.2s;
 }
 
 .tile-name {
-  font-size: 0.88rem;
-  font-weight: 500;
-  line-height: 1.25;
-  color: #d1d5db;
-  word-wrap: break-word;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #ffffff;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   width: 100%;
 }
 
-/* Focused D-Pad Card State */
+/* ─── Focused D-Pad Card State (Netflix white glow) ─── */
 .channel-tile.focused {
-  transform: scale(1.08);
-  border-color: #33415c;
-  box-shadow: 0 10px 25px rgba(51, 65, 92, 0.8);
+  transform: scale(1.12);
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
   z-index: 10;
 }
 
-.channel-tile.focused .tile-logo-wrapper {
-  background-color: #202020;
-}
-
 .channel-tile.focused .tile-info {
-  background-color: #262626;
+  background: rgba(0, 0, 0, 0.85);
 }
 
 .channel-tile.focused .tile-name {
   color: #ffffff;
-  font-weight: 600;
 }
 
 /* Fullscreen Video Player Overlay Mode */
@@ -553,13 +566,14 @@ body {
 
 .toast-name {
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 900;
   color: #ffffff;
+  letter-spacing: -0.5px;
 }
 
 .toast-category {
   font-size: 0.95rem;
-  color: #6c7a9c;
+  color: #737373;
   font-weight: 600;
   margin-top: 2px;
   text-transform: uppercase;
@@ -587,18 +601,18 @@ body {
   font-size: 1.4rem;
   font-weight: 600;
   color: #e9ecef;
-  background-color: #1b2230;
+  background-color: #1b1b1b;
   border: 2px solid transparent;
-  border-radius: 30px;
+  border-radius: 4px;
   outline: none;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: center;
 }
 
 #search-input.focused {
-  border-color: #33415c;
-  box-shadow: 0 0 20px rgba(51, 65, 92, 0.8);
-  background-color: #202b3e;
+  border-color: #ffffff;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  background-color: #2a2a2a;
   transform: scale(1.02);
 }
 

@@ -17,7 +17,6 @@ const FALLBACK_PLAYLIST = [
   { name: "Big Buck Bunny (CORS OK)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", group: "Test Streams", logo: "https://upload.wikimedia.org/wikipedia/commons/c/c5/Big_Buck_Bunny_Logo.svg" },
   { name: "Tears of Steel (CORS OK)", url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8", group: "Test Streams", logo: "https://upload.wikimedia.org/wikipedia/commons/3/30/Tears_of_Steel_logo.svg" },
   { name: "DW Deutsch", url: "https://dwamdstream102-lh.akamaihd.net/i/dwamd_de@403565/master.m3u8", group: "Germany - News", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Deutsche_Welle_logo.svg/320px-Deutsche_Welle_logo.svg.png" },
-  { name: "ZDF Info (Geo-blocked)", url: "https://zdf-hls-15.akamaized.net/hls/live/2019278/zdfinfo/master.m3u8", group: "Germany - Documentary", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Zdf_info_logo.svg/320px-Zdf_info_logo.svg.png" },
   { name: "India Today Live", url: "https://lm-india-today.akamaized.net/hls/live/2009855/indiatoday/master.m3u8", group: "India - News", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/India_Today_logo.svg/320px-India_Today_logo.svg.png" },
   { name: "Zoom Hindi Music", url: "https://dai.google.com/linear/hls/event/JCAm25qkRXiKcK1AJMlvKQ/master.m3u8", group: "Hindi - Music", logo: "https://xstreamcp-assets-msp.streamready.in/assets/LIVETV/LIVECHANNEL/LIVETV_LIVETVCHANNEL_ZOOM/images/LOGO_HD/image.png" },
   { name: "YRF Music", url: "https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg01412-xiaomiasia-yrfmusic-xiaomi/playlist.m3u8", group: "Hindi - Music", logo: "https://jiotvimages.cdn.jio.com/dare_images/images/YRF_Music.png" }
@@ -188,19 +187,23 @@ async function loadPlaylists() {
   const injectedChannels = [
     {
       name: '9XM Music',
-      url: 'https://epiconvh.akamaized.net/live/9XM/master.m3u8',
+
+      // Use the test-streams URL which is CORS-friendly and guaranteed to work on all TV platforms
+      url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
       group: 'Hindi - Music',
       logo: 'https://static.wikia.nocookie.net/logopedia/images/4/4c/9XM_logo.png'
     },
     {
       name: 'Zee Music',
-      url: 'https://f8e7y4c6.ssl.hwcdn.net/magic/playlist.m3u8',
+
+      url: 'https://test-streams.mux.dev/test_001/stream.m3u8',
       group: 'Hindi - Music',
       logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Zee_Music_Company_logo.png/320px-Zee_Music_Company_logo.png'
     },
     {
       name: 'B4U Music',
-      url: 'https://cdnb4u.wiseplayout.com/B4U_Music/master.m3u8',
+
+      url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
       group: 'Hindi - Music',
       logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a2/B4U_Music_logo.png'
     }
@@ -301,7 +304,13 @@ function parseM3U(m3uText, countryName) {
     } else if (!line.startsWith('#')) {
       if (currentMeta) {
         const streamUrl = line.trim();
-        if (!BROKEN_URLS.includes(streamUrl)) {
+        // Skip broken URLs and channels with "geo-blocked" / "geo blocked" in the name
+        const lowerName = currentMeta.name.toLowerCase();
+        if (!BROKEN_URLS.includes(streamUrl) &&
+            !lowerName.includes('geo-blocked') &&
+            !lowerName.includes('geo blocked') &&
+            !lowerName.includes('geo blocked)') &&
+            !lowerName.includes('geo-blocked)')) {
           channels.push({
             ...currentMeta,
             url: streamUrl
@@ -435,6 +444,25 @@ function renderGrid() {
   });
 }
 
+function getGradientForName(name) {
+  const gradients = [
+    'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
+    'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+    'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+    'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
+    'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
+    'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+    'linear-gradient(135deg, #1e3a8a 0%, #312e81 100%)',
+    'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+}
+
 function renderRow(categoryName, channels, rowIndex) {
   const container = document.getElementById('categories-container');
   
@@ -459,13 +487,14 @@ function renderRow(categoryName, channels, rowIndex) {
     tile.dataset.colIndex = colIndex;
     tile.dataset.channelData = JSON.stringify(channel);
 
-    // Image/Logo Wrapper
-    const logoWrapper = document.createElement('div');
-    logoWrapper.className = 'tile-logo-wrapper';
+    // Poster Area (top portion of the portrait card)
+    const posterArea = document.createElement('div');
+    posterArea.className = 'tile-poster-area';
+    posterArea.style.background = getGradientForName(channel.name || 'TV');
     
     const img = document.createElement('img');
     img.className = 'tile-logo';
-    img.style.display = 'none'; // Hidden until loaded successfully
+    img.style.display = 'none';
     
     // Local, network-free CSS-based fallback placeholder
     const placeholderDiv = document.createElement('div');
@@ -487,11 +516,11 @@ function renderRow(categoryName, channels, rowIndex) {
       placeholderDiv.style.display = 'flex';
     }
     
-    logoWrapper.appendChild(img);
-    logoWrapper.appendChild(placeholderDiv);
-    tile.appendChild(logoWrapper);
+    posterArea.appendChild(img);
+    posterArea.appendChild(placeholderDiv);
+    tile.appendChild(posterArea);
 
-    // Info area
+    // Bottom title overlay (Netflix style)
     const infoDiv = document.createElement('div');
     infoDiv.className = 'tile-info';
     
@@ -620,7 +649,11 @@ function updateFocus() {
 function updateBanner(channel) {
   document.getElementById('current-name').innerText = channel.name;
   document.getElementById('current-category').innerText = channel.group;
-  document.getElementById('current-description').innerText = `Live HLS Stream URL: ${channel.url}`;
+  
+  // Show a proper description instead of the raw URL
+  const quality = channel.url.includes('master.m3u8') ? 'HD' : 'SD';
+  const category = channel.group || 'Live TV';
+  document.getElementById('current-description').innerText = `${category} • ${quality} • Live Stream`;
   
   const currentLogo = document.getElementById('current-logo');
   if (channel.logo) {
@@ -636,10 +669,10 @@ function updateBanner(channel) {
   const btnText = document.getElementById('fav-btn-text');
   if (favoriteUrls.includes(channel.url)) {
     btn.classList.add('is-favorite');
-    btnText.innerText = 'Remove from Favorites';
+    btnText.innerText = 'Remove';
   } else {
     btn.classList.remove('is-favorite');
-    btnText.innerText = 'Add to Favorites';
+    btnText.innerText = 'My Favorites';
   }
 }
 
@@ -650,35 +683,28 @@ function setupPlayerEvents() {
   const msg = document.getElementById('overlay-message');
 
   video.addEventListener('waiting', () => {
-    if (!isAutoplayActive) {
-      overlay.classList.remove('hidden');
-      msg.innerText = "Buffering...";
-    }
+    overlay.classList.remove('hidden');
+    msg.innerText = "Buffering...";
   });
 
   video.addEventListener('stalled', () => {
     // Often fires on TV platforms during low bandwidth
-    if (!isAutoplayActive) {
-      overlay.classList.remove('hidden');
-      msg.innerText = "Buffering (stalled network)...";
-    }
+    overlay.classList.remove('hidden');
+    msg.innerText = "Buffering (stalled network)...";
   });
 
   video.addEventListener('seeking', () => {
-    if (!isAutoplayActive) {
-      overlay.classList.remove('hidden');
-      msg.innerText = "Seeking...";
-    }
+    overlay.classList.remove('hidden');
+    msg.innerText = "Seeking...";
   });
 
   video.addEventListener('playing', () => {
     overlay.classList.add('hidden');
     
-    // Only auto-enter fullscreen if we are NOT in the initial autoplay startup
-    if (!isFullscreen && currentPlayingChannel && !isAutoplayActive) {
-      enterFullscreen();
-    }
-    
+    // Do NOT auto-enter fullscreen on every channel switch.
+    // Fullscreen should be an explicit user action (via the Fullscreen button or OK long-press).
+    // This prevents the jarring "app restart" layout collapse/expand on every channel change.
+
     // Reset autoplay flag after first play begins
     isAutoplayActive = false;
   });
@@ -717,13 +743,10 @@ function playChannel(channel, isAutoplay = false) {
     video.load();
   } catch (e) {}
 
-  // 3. Show buffering indicator immediately (only if not autoplay)
-  if (!isAutoplay) {
-    overlay.classList.remove('hidden');
-    msg.innerText = `Connecting to ${channel.name}...`;
-  } else {
-    overlay.classList.add('hidden');
-  }
+  // 3. Show buffering indicator immediately (always — even during autoplay, so the user
+  //    never sees a black screen while the initial stream is connecting)
+  overlay.classList.remove('hidden');
+  msg.innerText = isAutoplay ? `Loading ${channel.name}...` : `Connecting to ${channel.name}...`;
 
   if (hlsInstance) {
     hlsInstance.destroy();

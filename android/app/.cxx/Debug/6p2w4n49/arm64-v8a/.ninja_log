@@ -1,0 +1,10 @@
+# ninja log v5
+1246	1379	1783698950883597158	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/Debug/6p2w4n49/obj/arm64-v8a/libappmodules.so	dee858033841016c
+1	1246	1783698950751544153	CMakeFiles/appmodules.dir/OnLoad.cpp.o	2e66e3ca1e1bf412
+0	1096	1783698950601706684	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	6e9a0e3f0cd03991
+8	47	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/Debug/6p2w4n49/arm64-v8a/CMakeFiles/cmake.verify_globs	c94da4cf9fbdd157
+47	115	1783787961022175491	build.ninja	7febda65c0dc1d93
+0	9	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/Debug/6p2w4n49/arm64-v8a/CMakeFiles/cmake.verify_globs	c94da4cf9fbdd157
+10	976	1783787962003254420	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	6e9a0e3f0cd03991
+10	1124	1783787962158142476	CMakeFiles/appmodules.dir/OnLoad.cpp.o	2e66e3ca1e1bf412
+1124	1688	1783787962716473083	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/Debug/6p2w4n49/obj/arm64-v8a/libappmodules.so	dee858033841016c

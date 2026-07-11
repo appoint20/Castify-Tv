@@ -13,8 +13,10 @@ interface ChannelRowProps {
 }
 
 /**
- * `<ChannelRow />` displays a horizontal grid of channels for a category.
- * Highly optimized for memory footprint on Smart TV devices.
+ * `<ChannelRow />` displays a horizontal row of Netflix-style portrait film cards.
+ * Mirrors the Netflix "row" pattern: a bold category title on the left,
+ * followed by a horizontally-scrollable rail of poster cards.
+ * Optimized for memory footprint on Smart TV devices.
  */
 export const ChannelRow: React.FC<ChannelRowProps> = React.memo(({
   title,
@@ -49,10 +51,15 @@ export const ChannelRow: React.FC<ChannelRowProps> = React.memo(({
 
   return (
     <View style={styles.container}>
-      {/* Category Header */}
-      <Text style={styles.rowTitle}>{title}</Text>
+      {/* Category Header — Netflix bold white title */}
+      <View style={styles.headerRow}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        {channels.length > 0 && (
+          <Text style={styles.rowCount}>{channels.length} channels</Text>
+        )}
+      </View>
 
-      {/* Optimized Horizontal List */}
+      {/* Optimized Horizontal Rail */}
       <FlatList
         data={channels}
         renderItem={renderChannelItem}
@@ -76,17 +83,27 @@ ChannelRow.displayName = 'ChannelRow';
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 12,
+    marginVertical: 6,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginLeft: 16,
+    marginBottom: 2,
   },
   rowTitle: {
-    color: '#F9FAFB', // Cool white
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 16,
-    marginBottom: 4,
-    letterSpacing: 0.5,
+    color: '#FFFFFF', // Netflix bright white
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  rowCount: {
+    color: '#737373', // Netflix gray
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 10,
   },
   listContent: {
-    paddingHorizontal: 6, // Offset padding to align nicely with title margin considering tile margin of 10
+    paddingHorizontal: 10, // Align with title margin + tile headroom
   },
 });

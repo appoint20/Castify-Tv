@@ -256,7 +256,7 @@ export default function App() {
           // Clean loader screen: Spinner and App Title only
           <View style={styles.splashContainer}>
             <ActivityIndicator size="large" color="#E50914" />
-            <Text style={styles.splashTitle}>Castify TV</Text>
+            <Text style={styles.splashTitle}>CastifyTV</Text>
           </View>
         ) : (
           // Main Smart TV coordinator layout
