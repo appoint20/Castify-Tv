@@ -16,6 +16,7 @@ Responsibilities:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -103,7 +104,8 @@ def parse_m3u(text: str, category: str) -> List[Dict[str, Any]]:
             }
         elif not line.startswith("#") and meta:
             meta["url"] = line
-            meta["id"] = f"{category}_{abs(hash(line))}"
+            # Stable ID: md5 of (category + url) — survives process restarts, so favorites persist.
+            meta["id"] = f"{category.lower()}_{hashlib.md5(f'{category}|{line}'.encode()).hexdigest()[:16]}"
             channels.append(meta)
             meta = None
     return channels
