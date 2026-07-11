@@ -56,7 +56,7 @@ class TestChannels:
     EXPECTED_CATEGORIES = {"Movies", "Sports", "Hindi", "Music", "German"}
 
     def test_channels_include_german_true(self, session):
-        r = session.get(f"{API}/channels", params={"include_german": "true"}, timeout=30)
+        r = session.get(f"{API}/channels", params={"include_german": "true", "limit_per_category": 500}, timeout=30)
         assert r.status_code == 200
         data = r.json()
         assert "categories" in data
@@ -73,6 +73,62 @@ class TestChannels:
         data = r.json()
         cats = {c["category"] for c in data["categories"]}
         assert "German" not in cats, f"German category should be excluded, got: {cats}"
+
+    def test_indian_filter_applied_to_global_categories(self, session):
+        """After Indian-only filter Movies/Sports/Music should be small (< Hindi),
+        and Hindi/German should remain large."""
+        r = session.get(
+            f"{API}/channels",
+            params={"include_german": "true", "limit_per_category": 500},
+            timeout=30,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        by_cat = {c["category"]: c["channels"] for c in data["categories"]}
+
+        # Movies / Music / Sports must be capped to Indian-only intersection
+        assert len(by_cat.get("Movies", [])) <= 60, f"Movies too large: {len(by_cat.get('Movies', []))}"
+        assert len(by_cat.get("Music", [])) <= 60, f"Music too large: {len(by_cat.get('Music', []))}"
+        assert len(by_cat.get("Sports", [])) <= 60, f"Sports too large: {len(by_cat.get('Sports', []))}"
+
+        # Hindi/German should remain the big playlists
+        assert len(by_cat.get("Hindi", [])) >= 50, f"Hindi unexpectedly small: {len(by_cat.get('Hindi', []))}"
+        assert len(by_cat.get("German", [])) >= 100, f"German unexpectedly small: {len(by_cat.get('German', []))}"
+
+        # Sanity: each of the filtered categories must be smaller than Hindi
+        assert len(by_cat.get("Movies", [])) < len(by_cat.get("Hindi", []))
+        assert len(by_cat.get("Sports", [])) < len(by_cat.get("Hindi", []))
+        assert len(by_cat.get("Music", [])) < len(by_cat.get("Hindi", []))
+
+    def test_movies_are_indian_flavored(self, session):
+        """Movies rail should contain Indian-brand names (Bollywood/Zee/Star/Movie...)."""
+        r = session.get(
+            f"{API}/channels",
+            params={"include_german": "true", "limit_per_category": 500},
+            timeout=30,
+        )
+        data = r.json()
+        movies = next((c["channels"] for c in data["categories"] if c["category"] == "Movies"), [])
+        assert movies, "No Movies channels returned"
+        indian_markers = ("bollywood", "zee", "star", "movie", "manoranjan", "cinema", "gold", "&tv")
+        matched = [m for m in movies if any(k in m["name"].lower() for k in indian_markers)]
+        # At least half of the movies should match a well-known Indian brand
+        assert len(matched) >= max(1, len(movies) // 2), (
+            f"Movies rail does not look Indian-filtered. Sample: {[m['name'] for m in movies[:10]]}"
+        )
+
+    def test_stable_ids_persist_across_requests(self, session):
+        """Channel IDs must be deterministic (md5-based) so favorites stay valid."""
+        r1 = session.get(f"{API}/channels", params={"include_german": "true"}, timeout=30).json()
+        r2 = session.get(f"{API}/channels", params={"include_german": "true"}, timeout=30).json()
+
+        def flat(d):
+            return {(c["id"], c["url"]) for cat in d["categories"] for c in cat["channels"]}
+
+        ids1 = flat(r1)
+        ids2 = flat(r2)
+        # Every (id,url) pair should match — IDs must be stable
+        assert ids1 == ids2, "Channel IDs are not stable across successive requests"
 
     def test_channel_shape(self, session):
         r = session.get(f"{API}/channels", params={"include_german": "true"}, timeout=30)

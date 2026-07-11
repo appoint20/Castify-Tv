@@ -1,14 +1,40 @@
 import React from "react";
 import Hls from "hls.js";
-import { X, Volume2, VolumeX, Loader2, AlertTriangle } from "lucide-react";
+import {
+  X, Volume2, VolumeX, Loader2, AlertTriangle,
+  Star, SkipForward, SkipBack,
+} from "lucide-react";
 
-export default function VideoPlayerModal({ channel, onClose }) {
+export default function VideoPlayerModal({
+  channel,
+  playlist = [],
+  onClose,
+  onChangeChannel,
+  isFavorite,
+  onToggleFavorite,
+}) {
   const videoRef = React.useRef(null);
   const hlsRef = React.useRef(null);
   const [state, setState] = React.useState("loading"); // loading | playing | error
   const [muted, setMuted] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState("");
 
+  const currentIndex = React.useMemo(
+    () => playlist.findIndex((c) => c.id === channel?.id),
+    [playlist, channel],
+  );
+
+  const goRelative = React.useCallback(
+    (delta) => {
+      if (!playlist.length || !onChangeChannel) return;
+      const from = currentIndex === -1 ? 0 : currentIndex;
+      const nextIdx = (from + delta + playlist.length) % playlist.length;
+      onChangeChannel(playlist[nextIdx]);
+    },
+    [playlist, currentIndex, onChangeChannel],
+  );
+
+  // Set up HLS whenever the channel changes
   React.useEffect(() => {
     if (!channel) return;
     const video = videoRef.current;
@@ -81,16 +107,61 @@ export default function VideoPlayerModal({ channel, onClose }) {
     if (videoRef.current) videoRef.current.muted = muted;
   }, [muted]);
 
-  // Close on ESC
+  // Keyboard + Remote-media key controls: ESC=close, ←/→ or MediaTrackPrev/Next=switch channel,
+  // 'f' toggles favorite, 'm' toggles mute
   React.useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") onClose();
+      // Never override typing inside form fields
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      if (e.key === "Escape") {
+        onClose();
+      } else if (e.key === "ArrowRight" || e.key === "MediaTrackNext") {
+        goRelative(1);
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft" || e.key === "MediaTrackPrevious") {
+        goRelative(-1);
+        e.preventDefault();
+      } else if (e.key === "f" || e.key === "F") {
+        if (channel && onToggleFavorite) onToggleFavorite(channel.id);
+      } else if (e.key === "m" || e.key === "M") {
+        setMuted((v) => !v);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, goRelative, channel, onToggleFavorite]);
+
+  // Web Media Session API — enables physical media keys / bluetooth remote / TV remote next-track buttons
+  React.useEffect(() => {
+    if (!("mediaSession" in navigator) || !channel) return;
+    try {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: channel.name,
+        artist: channel.category,
+        album: "Castify Live TV",
+        artwork: channel.logo
+          ? [{ src: channel.logo, sizes: "256x256", type: "image/png" }]
+          : [],
+      });
+      navigator.mediaSession.setActionHandler("nexttrack", () => goRelative(1));
+      navigator.mediaSession.setActionHandler("previoustrack", () => goRelative(-1));
+    } catch {
+      /* not supported — ignore */
+    }
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler("nexttrack", null);
+        navigator.mediaSession.setActionHandler("previoustrack", null);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [channel, goRelative]);
 
   if (!channel) return null;
+  const canStep = playlist.length > 1;
 
   return (
     <div
@@ -111,7 +182,6 @@ export default function VideoPlayerModal({ channel, onClose }) {
           className="w-full h-full object-contain bg-black"
         />
 
-        {/* Overlay states */}
         {state === "loading" && (
           <div
             data-testid="player-loading"
@@ -129,18 +199,33 @@ export default function VideoPlayerModal({ channel, onClose }) {
             <AlertTriangle className="w-10 h-10 text-nflix-red" />
             <h3 className="mt-3 font-heading text-xl font-bold">Stream unavailable</h3>
             <p className="mt-1 text-nflix-gray text-sm max-w-md">{errorMsg}</p>
+            <p className="mt-3 text-xs text-nflix-muted">
+              Tip: press <kbd className="px-1.5 py-0.5 bg-white/10 rounded">→</kbd> to try the next channel.
+            </p>
           </div>
         )}
 
         {/* Top bar */}
         <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/85 to-transparent">
-          <div>
+          <div className="min-w-0">
             <div className="text-[0.65rem] uppercase tracking-[0.22em] text-nflix-red font-bold">
               {channel.category} • Live
             </div>
-            <div className="font-heading font-bold text-lg md:text-xl">{channel.name}</div>
+            <div className="font-heading font-bold text-lg md:text-xl truncate">{channel.name}</div>
           </div>
           <div className="flex items-center gap-2">
+            {onToggleFavorite && (
+              <button
+                data-testid="player-favorite-btn"
+                onClick={() => onToggleFavorite(channel.id)}
+                className={`p-2 rounded-full transition-colors ${
+                  isFavorite ? "bg-nflix-red text-white" : "bg-white/10 hover:bg-white/25"
+                }`}
+                aria-label={isFavorite ? "Remove favorite" : "Add favorite"}
+              >
+                <Star className={`w-5 h-5 ${isFavorite ? "fill-white" : ""}`} />
+              </button>
+            )}
             <button
               data-testid="player-mute-btn"
               onClick={() => setMuted((m) => !m)}
@@ -158,6 +243,38 @@ export default function VideoPlayerModal({ channel, onClose }) {
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        {/* Prev / Next channel side buttons (visible if there is a playlist) */}
+        {canStep && (
+          <>
+            <button
+              data-testid="player-prev-btn"
+              onClick={() => goRelative(-1)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-black/55 hover:bg-black/85 flex items-center justify-center backdrop-blur-sm transition-colors"
+              aria-label="Previous channel"
+              title="Previous channel  (◄ / MediaPrev)"
+            >
+              <SkipBack className="w-5 h-5" />
+            </button>
+            <button
+              data-testid="player-next-btn"
+              onClick={() => goRelative(1)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-black/55 hover:bg-black/85 flex items-center justify-center backdrop-blur-sm transition-colors"
+              aria-label="Next channel"
+              title="Next channel  (► / MediaNext)"
+            >
+              <SkipForward className="w-5 h-5" />
+            </button>
+          </>
+        )}
+
+        {/* Hint strip at the bottom */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-[0.7rem] text-nflix-gray flex items-center gap-3 pointer-events-none">
+          <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">←</kbd> Prev</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">→</kbd> Next</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">F</kbd> Favorite</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">Esc</kbd> Close</span>
         </div>
       </div>
     </div>

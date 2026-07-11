@@ -140,27 +140,52 @@ async def refresh_channels() -> None:
         message="Downloading playlists…",
     )
 
-    all_channels: List[Dict[str, Any]] = []
-    seen_urls: set[str] = set()
-
+    # STEP 1: Download every playlist and remember its raw parsed channels
+    raw_by_cat: Dict[str, List[Dict[str, Any]]] = {}
     async with httpx.AsyncClient(timeout=FETCH_TIMEOUT) as client:
         for src in PLAYLIST_SOURCES:
             try:
                 log.info("Fetching %s from %s", src["category"], src["url"])
                 r = await client.get(src["url"])
                 r.raise_for_status()
-                parsed = parse_m3u(r.text, src["category"])
-                for c in parsed:
-                    if c["url"] in seen_urls:
-                        continue
-                    lname = c["name"].lower()
-                    if "geo-blocked" in lname or "geo blocked" in lname:
-                        continue
-                    seen_urls.add(c["url"])
-                    all_channels.append(c)
-                log.info("→ %s parsed: %d (dedup total: %d)", src["category"], len(parsed), len(all_channels))
+                raw_by_cat[src["category"]] = parse_m3u(r.text, src["category"])
+                log.info("→ %s parsed: %d", src["category"], len(raw_by_cat[src["category"]]))
             except Exception as exc:
                 log.warning("Failed to fetch %s: %s", src["category"], exc)
+                raw_by_cat[src["category"]] = []
+
+    # STEP 2: Build the Indian URL set from the Hindi playlist — used to gate
+    # Movies / Music / Sports so only Indian channels get through.
+    indian_urls: set[str] = {c["url"] for c in raw_by_cat.get("Hindi", [])}
+    log.info("Indian channel set size: %d", len(indian_urls))
+
+    # STEP 3: Merge into one master list while applying the "Indian only" filter
+    # to Movies / Music / Sports categories. Also drop channels flagged geo-blocked.
+    all_channels: List[Dict[str, Any]] = []
+    seen_urls: set[str] = set()
+
+    def include(channel: Dict[str, Any]) -> bool:
+        lname = channel["name"].lower()
+        if "geo-blocked" in lname or "geo blocked" in lname:
+            return False
+        # Restrict global category playlists to only channels that appear in the Hindi list.
+        if channel["category"] in {"Movies", "Music", "Sports"}:
+            return channel["url"] in indian_urls
+        # Hindi & German kept as-is
+        return True
+
+    # Order matters: process Movies/Music/Sports first so their category label wins
+    # over the Hindi "General" fallback for the same URL.
+    for cat_name in ("Movies", "Music", "Sports", "Hindi", "German"):
+        for c in raw_by_cat.get(cat_name, []):
+            if c["url"] in seen_urls:
+                continue
+            if not include(c):
+                continue
+            seen_urls.add(c["url"])
+            all_channels.append(c)
+
+    log.info("After Indian-filter merge: %d channels to probe", len(all_channels))
 
     probe_status.update(
         state="probing",
