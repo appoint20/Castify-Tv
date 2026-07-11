@@ -213,16 +213,46 @@ async def refresh_channels() -> None:
 
     log.info("Probe finished: %d/%d working", len(working), len(all_channels))
 
+    # Atomic DB swap: write into a temp collection, then rename it over `channels`.
+    # This guarantees readers never see an empty collection mid-refresh.
     if db is not None and working:
-        await db.channels.delete_many({})
+        temp_name = "channels_new"
+        temp_coll = db[temp_name]
+        await temp_coll.drop()  # start clean
         for i in range(0, len(working), 500):
-            await db.channels.insert_many(working[i:i + 500])
+            await temp_coll.insert_many(working[i:i + 500])
+        # MongoDB's renameCollection with dropTarget is atomic within a single DB.
+        await temp_coll.rename("channels", dropTarget=True)
+        log.info("Swapped %d channels into DB atomically.", len(working))
 
     probe_status.update(
         state="done",
         finished_at=datetime.now(timezone.utc).isoformat(),
         message=f"Ready: {len(working)} working channels",
     )
+
+
+# ─── Scheduled refresh (every 6 hours) ────────────────────────────────────
+REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # 6 h
+
+_scheduler_task: Optional[asyncio.Task] = None
+
+
+async def scheduled_refresh_loop() -> None:
+    """Background loop that re-probes every REFRESH_INTERVAL_SECONDS."""
+    while True:
+        try:
+            await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
+            log.info("[scheduler] 6-hour tick — triggering refresh.")
+            if probe_status["state"] in ("fetching", "probing"):
+                log.info("[scheduler] Refresh already running, skipping this tick.")
+                continue
+            await refresh_channels()
+        except asyncio.CancelledError:
+            log.info("[scheduler] Cancelled, exiting loop.")
+            raise
+        except Exception as exc:  # never let the loop die
+            log.exception("[scheduler] Unexpected error: %s", exc)
 
 
 async def ensure_initial_data() -> None:
@@ -238,11 +268,20 @@ async def ensure_initial_data() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global mongo_client, db
+    global mongo_client, db, _scheduler_task
     mongo_client = AsyncIOMotorClient(MONGO_URL)
     db = mongo_client[DB_NAME]
     await ensure_initial_data()
+    # Start the 6-hour re-probe scheduler
+    _scheduler_task = asyncio.create_task(scheduled_refresh_loop())
+    log.info("Scheduler started — refreshing every %d s.", REFRESH_INTERVAL_SECONDS)
     yield
+    if _scheduler_task:
+        _scheduler_task.cancel()
+        try:
+            await _scheduler_task
+        except (asyncio.CancelledError, Exception):
+            pass
     if mongo_client:
         mongo_client.close()
 
@@ -265,7 +304,7 @@ async def health() -> Dict[str, Any]:
 
 @app.get("/api/status")
 async def status() -> Dict[str, Any]:
-    return probe_status
+    return {**probe_status, "refresh_interval_seconds": REFRESH_INTERVAL_SECONDS}
 
 
 @app.post("/api/refresh")
