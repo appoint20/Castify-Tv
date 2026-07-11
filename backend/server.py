@@ -1,0 +1,296 @@
+"""
+Castify – Netflix-style IPTV backend.
+
+Responsibilities:
+  1. Fetch M3U playlists (movies, sport, music, hindi, german).
+  2. Parse channel metadata.
+  3. Probe each stream URL asynchronously to detect geo-blocked / broken streams.
+  4. Persist working channels in MongoDB with last-probed timestamp.
+  5. Expose REST endpoints for the React frontend:
+        GET  /api/channels        -> grouped channels (optionally with German)
+        GET  /api/status          -> probing progress
+        POST /api/refresh         -> kick off a fresh probe cycle
+        GET  /api/health          -> liveness check
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import re
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import httpx
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel
+
+# ─── Configuration ────────────────────────────────────────────────────────
+load_dotenv()
+
+MONGO_URL = os.environ["MONGO_URL"]
+DB_NAME = os.environ["DB_NAME"]
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+log = logging.getLogger("castify")
+
+PLAYLIST_SOURCES = [
+    {"category": "Hindi",  "language": "hin", "url": "https://iptv-org.github.io/iptv/languages/hin.m3u"},
+    {"category": "Movies", "language": "any", "url": "https://iptv-org.github.io/iptv/categories/movies.m3u"},
+    {"category": "Music",  "language": "any", "url": "https://iptv-org.github.io/iptv/categories/music.m3u"},
+    {"category": "Sports", "language": "any", "url": "https://iptv-org.github.io/iptv/categories/sports.m3u"},
+    {"category": "German", "language": "deu", "url": "https://iptv-org.github.io/iptv/languages/deu.m3u"},
+]
+
+PROBE_CONCURRENCY = 80
+PROBE_TIMEOUT = 4.0
+FETCH_TIMEOUT = 30.0
+
+# ─── Mongo client ─────────────────────────────────────────────────────────
+mongo_client: Optional[AsyncIOMotorClient] = None
+db = None
+
+probe_status: Dict[str, Any] = {
+    "state": "idle",
+    "started_at": None,
+    "finished_at": None,
+    "total": 0,
+    "checked": 0,
+    "working": 0,
+    "message": "",
+}
+
+
+class Channel(BaseModel):
+    id: str
+    name: str
+    url: str
+    logo: str = ""
+    group: str = ""
+    category: str
+    language: str = ""
+    country: str = ""
+    working: bool = True
+    last_probed: Optional[str] = None
+
+
+_ATTR_RE = re.compile(r'([a-zA-Z-]+)="([^"]*)"')
+
+
+def parse_m3u(text: str, category: str) -> List[Dict[str, Any]]:
+    channels: List[Dict[str, Any]] = []
+    meta: Optional[Dict[str, Any]] = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#EXTINF"):
+            display_name = line.rsplit(",", 1)[-1].strip() if "," in line else "Unknown"
+            attrs = dict(_ATTR_RE.findall(line))
+            meta = {
+                "name": display_name,
+                "logo": attrs.get("tvg-logo", ""),
+                "group": attrs.get("group-title", ""),
+                "language": attrs.get("tvg-language", ""),
+                "country": attrs.get("tvg-country", ""),
+                "tvg_id": attrs.get("tvg-id", ""),
+                "category": category,
+            }
+        elif not line.startswith("#") and meta:
+            meta["url"] = line
+            meta["id"] = f"{category}_{abs(hash(line))}"
+            channels.append(meta)
+            meta = None
+    return channels
+
+
+async def probe_stream(client: httpx.AsyncClient, url: str) -> bool:
+    try:
+        # Use streaming GET so an unresponsive body never blocks us past the timeout.
+        async with client.stream(
+            "GET",
+            url,
+            headers={"Range": "bytes=0-2047", "User-Agent": "VLC/3.0"},
+            timeout=PROBE_TIMEOUT,
+            follow_redirects=True,
+        ) as resp:
+            if resp.status_code >= 400:
+                return False
+        return True
+    except Exception:
+        return False
+
+
+async def refresh_channels() -> None:
+    global probe_status
+    probe_status.update(
+        state="fetching",
+        started_at=datetime.now(timezone.utc).isoformat(),
+        finished_at=None,
+        total=0,
+        checked=0,
+        working=0,
+        message="Downloading playlists…",
+    )
+
+    all_channels: List[Dict[str, Any]] = []
+    seen_urls: set[str] = set()
+
+    async with httpx.AsyncClient(timeout=FETCH_TIMEOUT) as client:
+        for src in PLAYLIST_SOURCES:
+            try:
+                log.info("Fetching %s from %s", src["category"], src["url"])
+                r = await client.get(src["url"])
+                r.raise_for_status()
+                parsed = parse_m3u(r.text, src["category"])
+                for c in parsed:
+                    if c["url"] in seen_urls:
+                        continue
+                    lname = c["name"].lower()
+                    if "geo-blocked" in lname or "geo blocked" in lname:
+                        continue
+                    seen_urls.add(c["url"])
+                    all_channels.append(c)
+                log.info("→ %s parsed: %d (dedup total: %d)", src["category"], len(parsed), len(all_channels))
+            except Exception as exc:
+                log.warning("Failed to fetch %s: %s", src["category"], exc)
+
+    probe_status.update(
+        state="probing",
+        total=len(all_channels),
+        message=f"Probing {len(all_channels)} streams…",
+    )
+
+    working: List[Dict[str, Any]] = []
+    sem = asyncio.Semaphore(PROBE_CONCURRENCY)
+    lock = asyncio.Lock()
+
+    async with httpx.AsyncClient(http2=False) as client:
+        async def worker(chan: Dict[str, Any]) -> None:
+            async with sem:
+                ok = await probe_stream(client, chan["url"])
+            async with lock:
+                probe_status["checked"] += 1
+                if ok:
+                    probe_status["working"] += 1
+                    chan["working"] = True
+                    chan["last_probed"] = datetime.now(timezone.utc).isoformat()
+                    working.append(chan)
+
+        await asyncio.gather(*(worker(c) for c in all_channels))
+
+    log.info("Probe finished: %d/%d working", len(working), len(all_channels))
+
+    if db is not None and working:
+        await db.channels.delete_many({})
+        for i in range(0, len(working), 500):
+            await db.channels.insert_many(working[i:i + 500])
+
+    probe_status.update(
+        state="done",
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        message=f"Ready: {len(working)} working channels",
+    )
+
+
+async def ensure_initial_data() -> None:
+    if db is None:
+        return
+    count = await db.channels.count_documents({})
+    if count == 0:
+        log.info("Channels collection empty — kicking off first probe.")
+        asyncio.create_task(refresh_channels())
+    else:
+        probe_status.update(state="done", total=count, working=count, message=f"Cached {count} channels")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global mongo_client, db
+    mongo_client = AsyncIOMotorClient(MONGO_URL)
+    db = mongo_client[DB_NAME]
+    await ensure_initial_data()
+    yield
+    if mongo_client:
+        mongo_client.close()
+
+
+app = FastAPI(title="Castify API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/api/health")
+async def health() -> Dict[str, Any]:
+    return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/status")
+async def status() -> Dict[str, Any]:
+    return probe_status
+
+
+@app.post("/api/refresh")
+async def refresh(background: BackgroundTasks) -> Dict[str, Any]:
+    if probe_status["state"] in ("fetching", "probing"):
+        return {"ok": True, "message": "Refresh already in progress", "status": probe_status}
+    background.add_task(refresh_channels)
+    return {"ok": True, "message": "Refresh started", "status": probe_status}
+
+
+@app.get("/api/channels")
+async def get_channels(
+    include_german: bool = Query(True, description="Whether to include German channels"),
+    limit_per_category: int = Query(60, ge=1, le=500),
+) -> Dict[str, Any]:
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    query: Dict[str, Any] = {"working": True}
+    if not include_german:
+        query["category"] = {"$ne": "German"}
+
+    cursor = db.channels.find(query, {"_id": 0})
+    channels: List[Dict[str, Any]] = await cursor.to_list(length=None)
+
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for c in channels:
+        grouped.setdefault(c["category"], []).append(c)
+
+    for cat, items in grouped.items():
+        items.sort(key=lambda x: (not bool(x.get("logo")), x["name"].lower()))
+        grouped[cat] = items[:limit_per_category]
+
+    order = ["Movies", "Sports", "Hindi", "Music"] + (["German"] if include_german else [])
+    result = [{"category": cat, "channels": grouped.get(cat, [])} for cat in order if grouped.get(cat)]
+
+    return {
+        "total_channels": sum(len(g["channels"]) for g in result),
+        "categories": result,
+        "probe_status": probe_status,
+    }
+
+
+@app.get("/api/hero")
+async def get_hero() -> Dict[str, Any]:
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not ready")
+    for cat in ("Movies", "Hindi", "Sports", "Music"):
+        doc = await db.channels.find_one(
+            {"working": True, "category": cat, "logo": {"$ne": ""}},
+            {"_id": 0},
+        )
+        if doc:
+            return {"channel": doc}
+    return {"channel": None}

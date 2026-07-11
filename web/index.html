@@ -3,92 +3,113 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CastifyTV — Premium Streaming</title>
-  <!-- Google Fonts: Outfit -->
+  <title>IPTVFlix — Live TV, Netflix-Style</title>
+  <meta name="theme-color" content="#141414">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-  <!-- hls.js for HLS streaming support in browsers that don't natively support it (e.g. Chrome, Android) -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app-container">
-    <!-- Top Netflix-style Navigation Header -->
-    <nav id="top-nav">
-      <div id="logo">Castify<span class="logo-accent">TV</span></div>
-      <div id="nav-menu">
-        <div class="nav-item focused active-filter" data-filter="all">Home</div>
-        <div class="nav-item" data-filter="Germany">Germany</div>
-        <div class="nav-item" data-filter="Austria">Austria</div>
-        <div class="nav-item" data-filter="Hindi">Hindi</div>
-        <div class="nav-item" data-filter="Favorites">My Favorites</div>
-        <div class="nav-item" data-filter="Search">🔍 Search</div>
-      </div>
-      <div id="nav-help">Press <span class="key-badge">F</span> to Favorite | <span class="key-badge">D</span> to Hide</div>
-    </nav>
+  <!-- Splash / Loader -->
+  <div id="splash" class="splash">
+    <div class="splash-logo">IPTV<span>FLIX</span></div>
+    <div class="splash-progress-track"><div id="splash-progress-fill" class="splash-progress-fill"></div></div>
+    <div id="splash-status" class="splash-status">Downloading playlists…</div>
+    <div id="splash-substatus" class="splash-substatus"></div>
+  </div>
 
-    <!-- Top Dashboard Split-Screen Viewport -->
-    <header id="dashboard">
-      <!-- Left Panel: Channel Info Banner -->
-      <div id="channel-banner">
-        <div id="meta-content">
-          <div class="channel-header-row">
-            <img id="current-logo" src="" alt="" style="display: none;">
-            <div>
-              <h2 id="current-name">Welcome to CastifyTV</h2>
-              <span id="current-category" class="badge">LIVE STREAM</span>
-            </div>
-          </div>
-          <p id="current-description">Use your TV Remote D-Pad (Arrow Keys and Enter) or mouse to browse and play channels. Press the F key to bookmark a channel to your Favorites row.</p>
-        </div>
-        <div id="banner-actions">
-          <button id="favorite-toggle-btn" class="banner-btn">
-            <span class="star-icon">★</span> <span id="fav-btn-text">My Favorites</span>
-          </button>
-          <button id="hide-channel-btn" class="banner-btn">
-            <span class="hide-icon">✕</span> <span id="hide-btn-text">Hide Channel</span>
-          </button>
-        </div>
+  <!-- Main App -->
+  <div id="app" class="app hidden">
+
+    <!-- Top Navigation -->
+    <header id="topbar" class="topbar">
+      <div class="topbar-left">
+        <div class="brand" data-testid="brand-logo">IPTV<span>FLIX</span></div>
+        <nav class="nav" id="category-nav">
+          <button class="nav-item active" data-filter="all" data-testid="nav-home">Home</button>
+          <button class="nav-item" data-filter="Movies" data-testid="nav-movies">Movies</button>
+          <button class="nav-item" data-filter="Sports" data-testid="nav-sports">Sports</button>
+          <button class="nav-item" data-filter="Music" data-testid="nav-music">Music</button>
+          <button class="nav-item" data-filter="Hindi" data-testid="nav-hindi">Hindi</button>
+          <button class="nav-item" data-filter="German" data-testid="nav-german">German</button>
+        </nav>
       </div>
 
-      <!-- Right Panel: Video Frame -->
-      <div id="video-frame">
-        <video id="player" preload="auto" autoplay playsinline></video>
-        <!-- Overlay Loading State -->
-        <div id="player-overlay" class="overlay hidden">
-          <div class="spinner"></div>
-          <p id="overlay-message">Connecting to Stream...</p>
+      <div class="topbar-right">
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="search-input" type="text" placeholder="Search channels…" data-testid="search-input">
         </div>
+
+        <label class="toggle" data-testid="german-toggle-label">
+          <span class="toggle-label">German</span>
+          <input type="checkbox" id="german-toggle" checked data-testid="german-toggle">
+          <span class="toggle-track">
+            <span class="toggle-thumb"></span>
+          </span>
+        </label>
       </div>
     </header>
 
-    <!-- Playlist Parsing Loader Screen -->
-    <div id="loader" class="overlay">
-      <div class="loader-title">CastifyTV</div>
-      <div class="spinner large"></div>
-      <p id="loader-status">Initializing dynamic playlist...</p>
-      <p id="loader-progress" class="subtext"></p>
+    <!-- Hero Section -->
+    <section id="hero" class="hero" data-testid="hero-section">
+      <div class="hero-image" id="hero-image"></div>
+      <div class="hero-gradient-bottom"></div>
+      <div class="hero-gradient-left"></div>
+
+      <div class="hero-content">
+        <div class="hero-eyebrow" id="hero-eyebrow">FEATURED · LIVE</div>
+        <h1 class="hero-title" id="hero-title">Welcome to IPTVFlix</h1>
+        <p class="hero-desc" id="hero-desc">Cinematic live TV: movies, sport, music and Hindi channels — plus optional German channels — all in one Netflix-style experience.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" id="hero-play" data-testid="hero-play-btn">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M8 5v14l11-7z"/></svg>
+            <span>Play</span>
+          </button>
+          <button class="btn btn-ghost" id="hero-info" data-testid="hero-info-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>More Info</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Category Rails -->
+    <main id="rails" class="rails" data-testid="rails-container"></main>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="empty-state hidden">
+      <h3>No channels match your filters</h3>
+      <p>Try turning on German channels or clearing your search.</p>
     </div>
 
-    <!-- Fullscreen Toast Overlay -->
-    <div id="fullscreen-toast">
-      <img id="toast-logo-img" class="toast-logo" src="" alt="">
-      <div class="toast-meta">
-        <span id="toast-channel-name" class="toast-name">Channel Name</span>
-        <span id="toast-channel-category" class="toast-category">Category</span>
+    <footer class="footer">
+      <span>© IPTVFlix · Powered by <a href="https://iptv-org.github.io" target="_blank" rel="noreferrer">iptv-org</a></span>
+    </footer>
+  </div>
+
+  <!-- Fullscreen Video Player Modal -->
+  <div id="player-modal" class="player-modal hidden" data-testid="player-modal">
+    <div class="player-backdrop"></div>
+    <div class="player-frame">
+      <button id="player-close" class="player-close" data-testid="player-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <video id="player" playsinline autoplay controls></video>
+      <div id="player-overlay" class="player-overlay">
+        <div class="spinner"></div>
+        <p id="player-status">Connecting to stream…</p>
+      </div>
+      <div class="player-meta">
+        <img id="player-logo" alt="">
+        <div>
+          <h2 id="player-title">Channel Name</h2>
+          <p id="player-category">Category</p>
+        </div>
       </div>
     </div>
-
-    <!-- Search Input Container (Shown only when Search filter is active) -->
-    <div id="search-container" class="hidden">
-      <input type="text" id="search-input" placeholder="Type channel name to search..." />
-    </div>
-
-    <!-- Netflix-Style Categories Grid Section -->
-    <main id="categories-container">
-      <!-- Generated dynamically in app.js -->
-    </main>
   </div>
 
   <script src="app.js"></script>

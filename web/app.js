@@ -1,1366 +1,636 @@
+/* ═══════════════════════════════════════════════════════════════════
+   IPTVFlix — Application Logic
+   ═══════════════════════════════════════════════════════════════════
+   Runtime targets:
+     • LG webOS TV      → packaged as IPK, direct network access
+     • Sony Bravia /    → Android TV / Google TV via WebView layer
+       Xiaomi Android TV
+     • Desktop browser  → preview mode (needs backend to bypass CORS)
+   ─────────────────────────────────────────────────────────────────── */
+
 const PLAYLISTS = [
-  { name: 'Germany', url: 'https://iptv-org.github.io/iptv/countries/de.m3u' },
-  { name: 'Austria', url: 'https://iptv-org.github.io/iptv/countries/at.m3u' },
-  { name: 'Hindi', url: 'https://iptv-org.github.io/iptv/languages/hin.m3u' }
+  { category: 'Movies', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
+  { category: 'Sports', url: 'https://iptv-org.github.io/iptv/categories/sport.m3u' },
+  { category: 'Music',  url: 'https://iptv-org.github.io/iptv/categories/music.m3u' },
+  { category: 'Hindi',  url: 'https://iptv-org.github.io/iptv/languages/hin.m3u' },
+  { category: 'German', url: 'https://iptv-org.github.io/iptv/languages/deu.m3u' }
 ];
 
-const BROKEN_URLS = [
-  'https://b.jsrdn.com/strm/channels/9xjalwa/master.m3u8',
-  'https://mumt02.tangotv.in/MASTIII/index.m3u8',
-  'https://d14c63magvk61v.cloudfront.net/strm/channels/zoom/master.m3u8',
-  'https://ca1.buximedia.com/itv/indian/tracks-v1a1/mono.m3u8',
-  'https://rts-live.yacast.net/rts_fm_300.m3u8'
-];
+const CATEGORY_ORDER = ['Movies', 'Sports', 'Music', 'Hindi', 'German'];
 
-const FALLBACK_PLAYLIST = [
-  { name: "Sintel HD Movie (CORS OK)", url: "https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8", group: "Test Streams", logo: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Sintel_logo.png" },
-  { name: "Big Buck Bunny (CORS OK)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", group: "Test Streams", logo: "https://upload.wikimedia.org/wikipedia/commons/c/c5/Big_Buck_Bunny_Logo.svg" },
-  { name: "Tears of Steel (CORS OK)", url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8", group: "Test Streams", logo: "https://upload.wikimedia.org/wikipedia/commons/3/30/Tears_of_Steel_logo.svg" },
-  { name: "DW Deutsch", url: "https://dwamdstream102-lh.akamaihd.net/i/dwamd_de@403565/master.m3u8", group: "Germany - News", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Deutsche_Welle_logo.svg/320px-Deutsche_Welle_logo.svg.png" },
-  { name: "India Today Live", url: "https://lm-india-today.akamaized.net/hls/live/2009855/indiatoday/master.m3u8", group: "India - News", logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/India_Today_logo.svg/320px-India_Today_logo.svg.png" },
-  { name: "Zoom Hindi Music", url: "https://dai.google.com/linear/hls/event/JCAm25qkRXiKcK1AJMlvKQ/master.m3u8", group: "Hindi - Music", logo: "https://xstreamcp-assets-msp.streamready.in/assets/LIVETV/LIVECHANNEL/LIVETV_LIVETVCHANNEL_ZOOM/images/LOGO_HD/image.png" },
-  { name: "YRF Music", url: "https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg01412-xiaomiasia-yrfmusic-xiaomi/playlist.m3u8", group: "Hindi - Music", logo: "https://jiotvimages.cdn.jio.com/dare_images/images/YRF_Music.png" }
-];
+// Backend URL is injected by the browser preview. On real TVs the fetch will
+// silently fail and we fall through to direct network access.
+const BACKEND_URL = (typeof window !== 'undefined' && window.__BACKEND_URL__)
+  || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL)
+  || detectBackendFromLocation();
 
-let allChannels = [];
-let favoriteUrls = [];
-let hiddenUrls = [];
-let activeFilter = 'all'; // "all", "Germany", "Austria", "India", "Favorites"
-let groupedCategories = {};
+function detectBackendFromLocation() {
+  try {
+    const { origin } = window.location;
+    // If we're being served from an Emergent preview URL, backend is on same origin.
+    if (origin.includes('emergentagent.com') || origin.includes('localhost')) return origin;
+  } catch (e) {}
+  return '';
+}
 
-// Focus engine state
-let focusZone = 'grid'; // "menu", "banner", "grid"
-let activeMenuItemIndex = 0;
-let activeRowIndex = 0;
-let activeColIndex = 0;
-let activeBannerIndex = 0; // 0: Favorite button, 1: Hide button
-let focusMatrix = []; // 2D array of grid elements
+// ─── Global State ─────────────────────────────────────────────────
+const state = {
+  allChannels: [],
+  visibleChannels: [],
+  workingUrls: new Set(),      // stream URLs confirmed live
+  probedUrls: new Set(),       // URLs whose probe result is known
+  includeGerman: true,          // default ON (per user requirement)
+  activeFilter: 'all',
+  searchQuery: '',
+  isBackendAvailable: false,
+  hlsInstance: null,
+  currentChannel: null
+};
 
-let currentPlayingChannel = null;
-let currentSelectedChannel = null;
-let hlsInstance = null;
-let isFullscreen = false;
-let toastTimeout = null;
-let isAutoplayActive = false; // flag to track startup autoplay without fullscreens/loaders
+// ─── DOM refs ─────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
 
-// Initialize Application
+const els = {
+  splash: $('splash'),
+  splashStatus: $('splash-status'),
+  splashSubstatus: $('splash-substatus'),
+  splashFill: $('splash-progress-fill'),
+  app: $('app'),
+  topbar: $('topbar'),
+  nav: $('category-nav'),
+  searchInput: $('search-input'),
+  germanToggle: $('german-toggle'),
+  hero: $('hero'),
+  heroImage: $('hero-image'),
+  heroTitle: $('hero-title'),
+  heroDesc: $('hero-desc'),
+  heroEyebrow: $('hero-eyebrow'),
+  heroPlay: $('hero-play'),
+  heroInfo: $('hero-info'),
+  rails: $('rails'),
+  emptyState: $('empty-state'),
+  playerModal: $('player-modal'),
+  playerClose: $('player-close'),
+  player: $('player'),
+  playerOverlay: $('player-overlay'),
+  playerStatus: $('player-status'),
+  playerLogo: $('player-logo'),
+  playerTitle: $('player-title'),
+  playerCategory: $('player-category')
+};
+
+// ─── Bootstrap ────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  loadFavorites();
-  loadHiddenChannels();
-  setupPlayerEvents();
-  setupKeyboardNavigation();
-  loadPlaylists();
-
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', () => {
-      // Keep first card selected when search text updates
-      activeRowIndex = 0;
-      activeColIndex = 0;
-      groupAndRender();
-    });
-  }
+  setupEventListeners();
+  init();
 });
 
-// Load Favorites from LocalStorage
-function loadFavorites() {
+async function init() {
+  updateSplash('Contacting server…', '');
+  await detectBackend();
+  updateSplash('Downloading playlists…', '');
+  const channels = await loadAllPlaylists();
+  state.allChannels = channels;
+
+  updateSplash('Testing stream availability…', `Found ${channels.length} channels`);
+  await probeAllStreams(channels);
+
+  updateSplash('Almost ready…', '');
+  await sleep(300);
+
+  showApp();
+  renderHero();
+  render();
+}
+
+// ─── Splash helpers ──────────────────────────────────────────────
+function updateSplash(status, sub = '', progress = null) {
+  if (els.splashStatus) els.splashStatus.textContent = status;
+  if (els.splashSubstatus) els.splashSubstatus.textContent = sub;
+  if (progress !== null && els.splashFill) {
+    els.splashFill.style.width = Math.min(100, Math.max(0, progress)) + '%';
+  }
+}
+
+function showApp() {
+  els.splash.classList.add('hidden');
+  els.app.classList.remove('hidden');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Backend detection ───────────────────────────────────────────
+async function detectBackend() {
+  if (!BACKEND_URL) { state.isBackendAvailable = false; return; }
   try {
-    favoriteUrls = JSON.parse(localStorage.getItem('castify_favorites') || localStorage.getItem('nebula_favorites') || '[]');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const resp = await fetch(`${BACKEND_URL}/api/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    state.isBackendAvailable = resp.ok;
   } catch (e) {
-    favoriteUrls = [];
+    state.isBackendAvailable = false;
   }
+  console.log('[IPTVFlix] Backend available:', state.isBackendAvailable);
 }
 
-// Save Favorites
-function saveFavorites() {
-  localStorage.setItem('castify_favorites', JSON.stringify(favoriteUrls));
-}
+// ─── Playlist fetch + parse ──────────────────────────────────────
+async function loadAllPlaylists() {
+  const allChannels = [];
+  const seenUrls = new Set();
+  let totalDone = 0;
 
-// Load Hidden channels from LocalStorage
-function loadHiddenChannels() {
-  try {
-    hiddenUrls = JSON.parse(localStorage.getItem('castify_hidden') || localStorage.getItem('nebula_hidden') || '[]');
-  } catch (e) {
-    hiddenUrls = [];
-  }
-}
-
-// Save Hidden channels
-function saveHiddenChannels() {
-  localStorage.setItem('castify_hidden', JSON.stringify(hiddenUrls));
-}
-
-// Hide the active channel and automatically advance focus
-function hideActiveChannel() {
-  const channel = currentSelectedChannel || currentPlayingChannel;
-  if (!channel) return;
-
-  if (!hiddenUrls.includes(channel.url)) {
-    hiddenUrls.push(channel.url);
-    saveHiddenChannels();
-    console.log(`[App] Channel hidden: ${channel.name}`);
-  }
-
-  // Re-render the grid to remove the channel
-  groupAndRender();
-
-  // Relocate D-pad focus
-  if (focusMatrix.length > 0 && focusMatrix[0].length > 0) {
-    const row = Math.min(activeRowIndex, focusMatrix.length - 1);
-    const currentRow = focusMatrix[row];
-    const col = currentRow ? Math.min(activeColIndex, currentRow.length - 1) : 0;
-    focusZone = 'grid';
-    changeFocus(row, col);
-
-    // If the hidden channel was playing, auto-play the new focused channel
-    if (currentPlayingChannel && currentPlayingChannel.url === channel.url) {
-      const nextTile = currentRow ? currentRow[col] : null;
-      if (nextTile) {
-        const nextChan = JSON.parse(nextTile.dataset.channelData);
-        playChannel(nextChan);
-      }
-    }
-  } else {
-    focusZone = 'menu';
-    updateFocus();
-  }
-}
-
-// Initialize default favorites once on first boot if not already initialized
-function initializeDefaultFavorites() {
-  const defaultsInitialized = localStorage.getItem('castify_defaults_initialized_v3');
-  if (!defaultsInitialized) {
-    const defaultKeywords = ['9xm', 'zee music', 'b4u music', 'movies', 'favorit'];
-    allChannels.forEach(c => {
-      if (c.name && c.url) {
-        const lowerName = c.name.toLowerCase();
-        const matches = defaultKeywords.some(keyword => lowerName.includes(keyword));
-        if (matches) {
-          if (!favoriteUrls.includes(c.url)) {
-            favoriteUrls.push(c.url);
-          }
-        }
-      }
-    });
-    saveFavorites();
-    localStorage.setItem('castify_defaults_initialized_v3', 'true');
-  }
-}
-
-// Fetch and Parse Playlists
-async function loadPlaylists() {
-  const loader = document.getElementById('loader');
-  const status = document.getElementById('loader-status');
-  const progress = document.getElementById('loader-progress');
-  
-  let hasLoadedAny = false;
-
-  for (const playlist of PLAYLISTS) {
+  for (const src of PLAYLISTS) {
+    updateSplash(`Downloading ${src.category} channels…`, `${totalDone}/${PLAYLISTS.length} playlists loaded`, (totalDone / PLAYLISTS.length) * 40);
     try {
-      status.innerText = `Downloading ${playlist.name} playlist...`;
-      progress.innerText = `Connecting to ${playlist.url}`;
-      
-      const response = await fetch(playlist.url);
-      if (!response.ok) {
-        throw new Error(`HTTP status ${response.status}`);
+      const text = await fetchPlaylistText(src.url);
+      const parsed = parseM3U(text, src.category);
+      for (const ch of parsed) {
+        if (seenUrls.has(ch.url)) continue;
+        const lname = (ch.name || '').toLowerCase();
+        if (lname.includes('geo-blocked') || lname.includes('geo blocked')) continue;
+        seenUrls.add(ch.url);
+        allChannels.push(ch);
       }
-      const text = await response.text();
-      
-      status.innerText = `Parsing ${playlist.name} channels...`;
-      const parsed = parseM3U(text, playlist.name);
-      
-      allChannels.push(...parsed);
-      hasLoadedAny = true;
+      console.log(`[IPTVFlix] ${src.category}: parsed ${parsed.length} channels`);
     } catch (err) {
-      console.warn(`Failed to fetch playlist ${playlist.name}:`, err);
+      console.warn(`[IPTVFlix] Failed to fetch ${src.category}:`, err);
     }
+    totalDone++;
   }
 
-  // Fallback to offline streams if fetch failed
-  if (!hasLoadedAny || allChannels.length === 0) {
-    console.log('Offline or fetch failed, loading local fallback playlist...');
-    status.innerText = 'Offline: Loading local fallback playlist...';
-    allChannels = FALLBACK_PLAYLIST.slice();
-  }
-
-  // Inject guaranteed working channels for requested favorites
-  const injectedChannels = [
-    {
-      name: '9XM Music',
-      // Use the test-streams URL which is CORS-friendly and guaranteed to work on all TV platforms
-      url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-      group: 'Hindi - Music',
-      logo: 'https://static.wikia.nocookie.net/logopedia/images/4/4c/9XM_logo.png'
-    },
-    {
-      name: 'Zee Music',
-      url: 'https://test-streams.mux.dev/test_001/stream.m3u8',
-      group: 'Hindi - Music',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Zee_Music_Company_logo.png/320px-Zee_Music_Company_logo.png'
-    },
-    {
-      name: 'B4U Music',
-      url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-      group: 'Hindi - Music',
-      logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a2/B4U_Music_logo.png'
-    }
-  ];
-
-  injectedChannels.forEach(chan => {
-    const exists = allChannels.some(c => c.url === chan.url || (c.name && c.name.toLowerCase() === chan.name.toLowerCase()));
-    if (!exists) {
-      allChannels.push(chan);
-    }
-  });
-
-  // Pre-populate default favorites on first launch
-  initializeDefaultFavorites();
-
-  groupAndRender();
-  
-  // Hide loader
-  loader.classList.add('hidden');
-  
-  // Initial select & focus
-  focusFirstAvailableTile();
-  if (allChannels.length > 0) {
-    // ALWAYS start with 9XM Music if available
-    let initialChannel = allChannels.find(c => c.name && c.name.toLowerCase().includes('9xm'));
-    
-    if (!initialChannel) {
-      initialChannel = allChannels.find(c => c.name && c.name.toLowerCase().includes('zee music'));
-    }
-    if (!initialChannel) {
-      initialChannel = allChannels.find(c => c.name && c.name.toLowerCase().includes('b4u music'));
-    }
-    if (!initialChannel) {
-      const favoriteChannels = allChannels.filter(c => favoriteUrls.includes(c.url) && !hiddenUrls.includes(c.url));
-      if (favoriteChannels.length > 0) {
-        initialChannel = favoriteChannels[0];
-      }
-    }
-    if (!initialChannel) {
-      initialChannel = allChannels[0];
-    }
-    
-    selectChannelInGrid(initialChannel);
-    playChannel(initialChannel, true); // true = isAutoplay
-  }
+  updateSplash('Playlists loaded', `${allChannels.length} unique channels`, 40);
+  return allChannels;
 }
 
-// Position focus directly on the active playing channel tile in grid
-function selectChannelInGrid(channel) {
-  if (!channel || focusMatrix.length === 0) return;
-  for (let r = 0; r < focusMatrix.length; r++) {
-    for (let c = 0; c < focusMatrix[r].length; c++) {
-      const tile = focusMatrix[r][c];
-      if (tile) {
-        const tileChan = JSON.parse(tile.dataset.channelData);
-        if (tileChan.url === channel.url) {
-          activeRowIndex = r;
-          activeColIndex = c;
-          focusZone = 'grid';
-          changeFocus(r, c);
-          return;
-        }
-      }
-    }
+async function fetchPlaylistText(url) {
+  // 1) Try backend proxy (works for browser preview + also works from TVs if backend URL is reachable)
+  if (state.isBackendAvailable && BACKEND_URL) {
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/playlist?url=${encodeURIComponent(url)}`);
+      if (resp.ok) return await resp.text();
+    } catch (e) { /* fall through */ }
   }
+  // 2) Direct fetch (works on native TV, blocked in browser by CORS)
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.text();
 }
 
-// Simple regex M3U Parser
-function parseM3U(m3uText, countryName) {
-  const lines = m3uText.split(/\r?\n/);
+const ATTR_RE = /([a-zA-Z-]+)="([^"]*)"/g;
+
+function parseM3U(text, category) {
+  const lines = text.split(/\r?\n/);
   const channels = [];
-  let currentMeta = null;
+  let meta = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    if (line.startsWith('#EXTINF:')) {
-      const lastCommaIndex = line.lastIndexOf(',');
-      let metadataSegment = line;
-      let displayName = 'Unknown Channel';
-      
-      if (lastCommaIndex !== -1) {
-        metadataSegment = line.substring(0, lastCommaIndex);
-        displayName = line.substring(lastCommaIndex + 1).trim();
-      }
-      
-      const groupMatch = metadataSegment.match(/group-title="([^"]+)"/i);
-      const logoMatch = metadataSegment.match(/(?:tvg-logo|logo)="([^"]+)"/i);
-      const idMatch = metadataSegment.match(/tvg-id="([^"]+)"/i);
-      
-      currentMeta = {
+    if (line.startsWith('#EXTINF')) {
+      const displayName = line.includes(',') ? line.slice(line.lastIndexOf(',') + 1).trim() : 'Unknown';
+      const attrs = {};
+      let m;
+      ATTR_RE.lastIndex = 0;
+      while ((m = ATTR_RE.exec(line)) !== null) attrs[m[1]] = m[2];
+      meta = {
         name: displayName,
-        group: groupMatch ? `${countryName} - ${groupMatch[1]}` : `${countryName} - General`,
-        logo: logoMatch ? logoMatch[1] : '',
-        id: idMatch ? idMatch[1] : ''
+        logo: attrs['tvg-logo'] || '',
+        group: attrs['group-title'] || '',
+        language: attrs['tvg-language'] || '',
+        country: attrs['tvg-country'] || '',
+        tvgId: attrs['tvg-id'] || '',
+        category,
       };
-    } else if (!line.startsWith('#')) {
-      if (currentMeta) {
-        const streamUrl = line.trim();
-        // Skip broken URLs and channels with "geo-blocked" / "geo blocked" in the name
-        const lowerName = currentMeta.name.toLowerCase();
-        if (!BROKEN_URLS.includes(streamUrl) &&
-            !lowerName.includes('geo-blocked') &&
-            !lowerName.includes('geo blocked') &&
-            !lowerName.includes('geo blocked)') &&
-            !lowerName.includes('geo-blocked)')) {
-          channels.push({
-            ...currentMeta,
-            url: streamUrl
-          });
-        }
-        currentMeta = null;
-      }
+    } else if (!line.startsWith('#') && meta) {
+      meta.url = line;
+      meta.id = `${category}-${meta.name}-${meta.url}`.replace(/[^a-zA-Z0-9-]/g, '_').slice(0, 100);
+      channels.push(meta);
+      meta = null;
     }
   }
   return channels;
 }
 
-// Group and Render Channels based on active filter
-function groupAndRender() {
-  groupedCategories = {};
+// ─── Stream probing (geo-blocked filter) ─────────────────────────
+async function probeAllStreams(channels) {
+  const urls = channels.map(c => c.url);
+  if (urls.length === 0) return;
 
-  // Toggle search bar container visibility
-  const searchContainer = document.getElementById('search-container');
-  if (searchContainer) {
-    if (activeFilter === 'Search') {
-      searchContainer.classList.remove('hidden');
-    } else {
-      searchContainer.classList.add('hidden');
+  // If backend is available, batch-probe there (much faster + no CORS issues).
+  if (state.isBackendAvailable && BACKEND_URL) {
+    try {
+      await probeViaBackend(urls);
+      return;
+    } catch (e) {
+      console.warn('[IPTVFlix] Backend probe failed, falling back to client-side:', e);
     }
   }
+  // Fallback: probe from client in batches (works on TVs; in browser most will fail CORS).
+  await probeClientSide(urls);
+}
 
-  // 0. Filter out hidden/deleted channels
-  const visibleChannels = allChannels.filter(c => !hiddenUrls.includes(c.url));
-
-  // 1. Separate favorites into their own list
-  const favoriteChannels = visibleChannels.filter(c => favoriteUrls.includes(c.url));
-  
-  // 2. Filter channels based on navigation menu category selection
-  let filtered = visibleChannels;
-  if (activeFilter === 'Favorites') {
-    filtered = favoriteChannels;
-  } else if (activeFilter === 'Search') {
-    const query = (document.getElementById('search-input') ? document.getElementById('search-input').value : '').toLowerCase().trim();
-    filtered = visibleChannels.filter(c => {
-      const name = c.name || '';
-      const group = c.group || '';
-      return name.toLowerCase().includes(query) || group.toLowerCase().includes(query);
-    });
-  } else if (activeFilter !== 'all') {
-    filtered = visibleChannels.filter(c => c.group.startsWith(activeFilter));
-  }
-
-  // 3. Populate group map
-  if (activeFilter === 'Search') {
-    groupedCategories['Search Results'] = filtered;
-  } else if (activeFilter === 'Favorites') {
-    filtered.forEach(channel => {
-      const category = `★ Favorites - ${channel.group || 'General'}`;
-      if (!groupedCategories[category]) {
-        groupedCategories[category] = [];
-      }
-      groupedCategories[category].push(channel);
-    });
-  } else {
-    filtered.forEach(channel => {
-      const category = channel.group || 'General';
-      if (!groupedCategories[category]) {
-        groupedCategories[category] = [];
-      }
-      groupedCategories[category].push(channel);
-    });
-
-    // 4. Inject Favorites rows at the absolute top if we have favorites and filter isn't set to Favorites
-    if (favoriteChannels.length > 0) {
-      favoriteChannels.forEach(channel => {
-        const category = `★ Favorites - ${channel.group || 'General'}`;
-        if (!groupedCategories[category]) {
-          groupedCategories[category] = [];
-        }
-        // Avoid duplicate entries in the same category if it's already added
-        if (!groupedCategories[category].some(x => x.url === channel.url)) {
-          groupedCategories[category].push(channel);
-        }
+async function probeViaBackend(urls) {
+  const BATCH = 400;
+  const total = urls.length;
+  let done = 0;
+  for (let i = 0; i < urls.length; i += BATCH) {
+    const batch = urls.slice(i, i + BATCH);
+    updateSplash('Filtering geo-blocked streams…', `${done}/${total} checked`, 40 + (done / total) * 55);
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/probe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: batch })
       });
-    }
-  }
-
-  renderGrid();
-
-  // Safety boundaries check if in grid zone
-  if (focusZone === 'grid') {
-    if (focusMatrix.length > 0 && focusMatrix[0].length > 0) {
-      activeRowIndex = Math.min(activeRowIndex, focusMatrix.length - 1);
-      activeColIndex = Math.min(activeColIndex, focusMatrix[activeRowIndex].length - 1);
-      changeFocus(activeRowIndex, activeColIndex);
-    } else {
-      if (activeFilter === 'Search') {
-        focusZone = 'search';
-      } else {
-        focusZone = 'menu';
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      for (const [u, ok] of Object.entries(data.results || {})) {
+        state.probedUrls.add(u);
+        if (ok) state.workingUrls.add(u);
       }
-      updateFocus();
+    } catch (e) {
+      console.warn('[IPTVFlix] Probe batch failed, assuming all working:', e);
+      // On failure, don't drop the channels — assume they work.
+      batch.forEach(u => { state.probedUrls.add(u); state.workingUrls.add(u); });
+    }
+    done += batch.length;
+  }
+  updateSplash('Filtering complete', `${state.workingUrls.size}/${total} streams live`, 100);
+}
+
+async function probeClientSide(urls) {
+  // Lightweight parallel probing — best-effort. On TVs this actually works
+  // because there's no CORS restriction; in browser most will 'error' due to CORS.
+  const CONCURRENCY = 40;
+  const total = urls.length;
+  let done = 0;
+  let idx = 0;
+
+  async function worker() {
+    while (idx < urls.length) {
+      const my = idx++;
+      const url = urls[my];
+      const ok = await probeOne(url);
+      state.probedUrls.add(url);
+      if (ok) state.workingUrls.add(url);
+      done++;
+      if (done % 20 === 0) {
+        updateSplash('Filtering geo-blocked streams…', `${done}/${total} checked`, 40 + (done / total) * 55);
+      }
     }
   }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  updateSplash('Filtering complete', `${state.workingUrls.size}/${total} streams live`, 100);
 }
 
-// Render Netflix-style poster card grid
-function renderGrid() {
-  const container = document.getElementById('categories-container');
-  container.innerHTML = '';
-  
-  focusMatrix = [];
-  let rowIndex = 0;
-
-  // 1. Gather and sort all Favorites subcategories
-  const favCategories = Object.keys(groupedCategories)
-    .filter(cat => cat.startsWith('★ Favorites'))
-    .sort((a, b) => a.localeCompare(b));
-
-  favCategories.forEach(categoryName => {
-    renderRow(categoryName, groupedCategories[categoryName], rowIndex++);
-  });
-
-  // 2. Sort and render other categories (largest first)
-  const otherCategories = Object.keys(groupedCategories)
-    .filter(cat => !cat.startsWith('★ Favorites') && cat !== 'Search Results')
-    .sort((a, b) => groupedCategories[b].length - groupedCategories[a].length);
-
-  // If Search Results is present, render it first
-  if (groupedCategories['Search Results']) {
-    renderRow('Search Results', groupedCategories['Search Results'], rowIndex++);
-  }
-
-  otherCategories.forEach(categoryName => {
-    renderRow(categoryName, groupedCategories[categoryName], rowIndex++);
-  });
-}
-
-function getGradientForName(name) {
-  const gradients = [
-    'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-    'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
-    'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
-    'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
-    'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
-    'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-    'linear-gradient(135deg, #1e3a8a 0%, #312e81 100%)',
-    'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)'
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % gradients.length;
-  return gradients[index];
-}
-
-function renderRow(categoryName, channels, rowIndex) {
-  const container = document.getElementById('categories-container');
-  
-  // Cap tiles per row to prevent TV WebView GPU memory exhaustion
-  const MAX_TILES_PER_ROW = 30;
-  const displayChannels = channels.length > MAX_TILES_PER_ROW ? channels.slice(0, MAX_TILES_PER_ROW) : channels;
-
-  const rowDiv = document.createElement('div');
-  rowDiv.className = 'category-row';
-  rowDiv.id = `row-${rowIndex}`;
-
-  const titleH2 = document.createElement('h2');
-  titleH2.className = 'category-title';
-  const countSuffix = channels.length > MAX_TILES_PER_ROW ? ` (${MAX_TILES_PER_ROW}+ of ${channels.length})` : '';
-  titleH2.innerText = categoryName + countSuffix;
-  rowDiv.appendChild(titleH2);
-
-  const tilesWrapper = document.createElement('div');
-  tilesWrapper.className = 'tiles-wrapper';
-  
-  const rowTiles = [];
-
-  displayChannels.forEach((channel, colIndex) => {
-    const tile = document.createElement('div');
-    tile.className = 'channel-tile';
-    tile.dataset.rowIndex = rowIndex;
-    tile.dataset.colIndex = colIndex;
-    tile.dataset.channelData = JSON.stringify(channel);
-
-    // Poster Area (top portion of the portrait card)
-    const posterArea = document.createElement('div');
-    posterArea.className = 'tile-poster-area';
-    posterArea.style.background = getGradientForName(channel.name || 'TV');
-    
-    const img = document.createElement('img');
-    img.className = 'tile-logo';
-    img.style.display = 'none';
-    
-    // Local, network-free CSS-based fallback placeholder
-    const placeholderDiv = document.createElement('div');
-    placeholderDiv.className = 'tile-logo-placeholder';
-    const initials = channel.name ? channel.name.replace(/[^a-zA-Z0-9 ]/g, '').split(' ').map(w => w[0]).filter(c => c).join('').substring(0, 3).toUpperCase() : 'TV';
-    placeholderDiv.innerText = initials || 'TV';
-
-    if (channel.logo) {
-      img.src = channel.logo;
-      img.onload = () => {
-        img.style.display = 'block';
-        placeholderDiv.style.display = 'none';
-      };
-      img.onerror = () => {
-        img.style.display = 'none';
-        placeholderDiv.style.display = 'flex';
-      };
-    } else {
-      placeholderDiv.style.display = 'flex';
-    }
-    
-    posterArea.appendChild(img);
-    posterArea.appendChild(placeholderDiv);
-    tile.appendChild(posterArea);
-
-    // Bottom title overlay (Netflix style)
-    const infoDiv = document.createElement('div');
-    infoDiv.className = 'tile-info';
-    
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'tile-name';
-    nameSpan.innerText = channel.name;
-    infoDiv.appendChild(nameSpan);
-    tile.appendChild(infoDiv);
-
-    // Mouse Selection Support
-    tile.addEventListener('click', () => {
-      focusZone = 'grid';
-      changeFocus(rowIndex, colIndex);
-      playChannel(channel);
-    });
-
-    tilesWrapper.appendChild(tile);
-    rowTiles.push(tile);
-  });
-
-  rowDiv.appendChild(tilesWrapper);
-  container.appendChild(rowDiv);
-
-  focusMatrix.push(rowTiles);
-}
-
-// 3-Zone Focus Engine Manager
-function focusFirstAvailableTile() {
-  if (focusMatrix.length > 0 && focusMatrix[0].length > 0) {
-    focusZone = 'grid';
-    changeFocus(0, 0);
-  } else {
-    // If no channels under filter, focus navigation bar menu instead
-    focusZone = 'menu';
-    updateFocus();
-  }
-}
-
-function changeFocus(rowIndex, colIndex) {
-  // Bound check
-  if (rowIndex < 0 || rowIndex >= focusMatrix.length) return;
-  if (colIndex < 0 || colIndex >= focusMatrix[rowIndex].length) return;
-
-  activeRowIndex = rowIndex;
-  activeColIndex = colIndex;
-
-  const currentFocused = focusMatrix[activeRowIndex][activeColIndex];
-  const channelData = JSON.parse(currentFocused.dataset.channelData);
-  currentSelectedChannel = channelData;
-
-  updateFocus();
-  updateBanner(channelData);
-
-  // Pre-fetch adjacent streams in the background to speed up channel zapping
-  preloadAdjacentChannels();
-}
-
-// TV-compatible scrolling helper for older webOS versions
-function scrollToElement(parent, child, isHorizontal = true) {
-  if (!parent || !child) return;
-  if (isHorizontal) {
-    const targetLeft = child.offsetLeft - (parent.clientWidth / 2) + (child.clientWidth / 2);
-    parent.scrollLeft = targetLeft;
-  } else {
-    const targetTop = child.offsetTop - (parent.clientHeight / 2) + (child.clientHeight / 2);
-    parent.scrollTop = targetTop;
-  }
-}
-
-function updateFocus() {
-  // 1. Remove all focus styles
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('focused'));
-  document.querySelectorAll('.channel-tile').forEach(el => el.classList.remove('focused'));
-  document.getElementById('favorite-toggle-btn').classList.remove('focused');
-  document.getElementById('hide-channel-btn').classList.remove('focused');
-  
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.classList.remove('focused');
-  }
-
-  // 2. Set focus on the active zone element
-  if (focusZone === 'menu') {
-    const menuItems = document.querySelectorAll('.nav-item');
-    if (menuItems[activeMenuItemIndex]) {
-      menuItems[activeMenuItemIndex].classList.add('focused');
-      scrollToElement(document.getElementById('nav-menu'), menuItems[activeMenuItemIndex], true);
-    }
-  } else if (focusZone === 'banner') {
-    document.getElementById('favorite-toggle-btn').classList.remove('focused');
-    document.getElementById('hide-channel-btn').classList.remove('focused');
-    
-    const bannerBtns = [
-      document.getElementById('favorite-toggle-btn'),
-      document.getElementById('hide-channel-btn')
-    ];
-    if (bannerBtns[activeBannerIndex]) {
-      bannerBtns[activeBannerIndex].classList.add('focused');
-    }
-  } else if (focusZone === 'search') {
-    if (searchInput) {
-      searchInput.classList.add('focused');
-      searchInput.focus();
-    }
-  } else if (focusZone === 'grid') {
-    const currentRow = focusMatrix[activeRowIndex];
-    const tile = currentRow ? currentRow[activeColIndex] : null;
-    if (tile) {
-      tile.classList.add('focused');
-      
-      // Auto scroll card row horizontally using TV-compatible helper
-      scrollToElement(tile.parentElement, tile, true);
-
-      // Auto scroll categories container vertically using TV-compatible helper
-      const activeRowEl = document.getElementById(`row-${activeRowIndex}`);
-      scrollToElement(document.getElementById('categories-container'), activeRowEl, false);
-    }
-  }
-
-  // Blur search input if not focused to avoid soft keyboard issues
-  if (focusZone !== 'search' && searchInput) {
-    searchInput.blur();
-  }
-}
-
-function updateBanner(channel) {
-  document.getElementById('current-name').innerText = channel.name;
-  document.getElementById('current-category').innerText = channel.group;
-  
-  // Show a proper description instead of the raw URL
-  const quality = channel.url.includes('master.m3u8') ? 'HD' : 'SD';
-  const category = channel.group || 'Live TV';
-  document.getElementById('current-description').innerText = `${category} • ${quality} • Live Stream`;
-  
-  const currentLogo = document.getElementById('current-logo');
-  if (channel.logo) {
-    currentLogo.src = channel.logo;
-    currentLogo.style.display = 'block';
-    currentLogo.onerror = () => { currentLogo.style.display = 'none'; };
-  } else {
-    currentLogo.style.display = 'none';
-  }
-
-  // Update Favorite Toggle Button Style
-  const btn = document.getElementById('favorite-toggle-btn');
-  const btnText = document.getElementById('fav-btn-text');
-  if (favoriteUrls.includes(channel.url)) {
-    btn.classList.add('is-favorite');
-    btnText.innerText = 'Remove';
-  } else {
-    btn.classList.remove('is-favorite');
-    btnText.innerText = 'My Favorites';
-  }
-}
-
-// Setup unified player HTML5 media event listeners
-function setupPlayerEvents() {
-  const video = document.getElementById('player');
-  const overlay = document.getElementById('player-overlay');
-  const msg = document.getElementById('overlay-message');
-
-  video.addEventListener('waiting', () => {
-    overlay.classList.remove('hidden');
-    msg.innerText = "Buffering...";
-  });
-
-  video.addEventListener('stalled', () => {
-    // Often fires on TV platforms during low bandwidth
-    overlay.classList.remove('hidden');
-    msg.innerText = "Buffering (stalled network)...";
-  });
-
-  video.addEventListener('seeking', () => {
-    overlay.classList.remove('hidden');
-    msg.innerText = "Seeking...";
-  });
-
-  video.addEventListener('playing', () => {
-    overlay.classList.add('hidden');
-    
-    // Do NOT auto-enter fullscreen on every channel switch.
-    // Fullscreen should be an explicit user action (via the Fullscreen button or OK long-press).
-    // This prevents the jarring "app restart" layout collapse/expand on every channel change.
-
-    // Reset autoplay flag after first play begins
-    isAutoplayActive = false;
-  });
-
-  video.addEventListener('canplay', () => {
-    overlay.classList.add('hidden');
-  });
-
-  video.addEventListener('timeupdate', () => {
-    // Hide overlay if video is playing and progressing
-    if (!video.paused && video.currentTime > 0 && !overlay.classList.contains('hidden')) {
-      overlay.classList.add('hidden');
-    }
-  });
-}
-
-// Media Playback (Hls.js with native hardware fallback)
-function playChannel(channel, isAutoplay = false) {
-  if (!channel) return;
-  currentPlayingChannel = channel;
-  isAutoplayActive = isAutoplay;
-
-  const video = document.getElementById('player');
-  const overlay = document.getElementById('player-overlay');
-  const msg = document.getElementById('overlay-message');
-
-  // 1. Show the channel toast (logo & name) on the bottom right immediately (only if not autoplay)
-  if (!isAutoplay) {
-    showChannelToast();
-  }
-
-  // 2. Pause and clear current source to prevent a frozen frame from the previous channel
-  video.pause();
+async function probeOne(url) {
   try {
-    video.removeAttribute('src');
-    video.load();
-  } catch (e) {}
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { 'Range': 'bytes=0-1023' },
+      signal: controller.signal,
+      mode: 'cors'
+    });
+    clearTimeout(timer);
+    if (resp.type === 'opaque') return false;
+    return resp.ok || resp.status === 206;
+  } catch (e) {
+    return false;
+  }
+}
 
-  // 3. Show buffering indicator immediately (always — even during autoplay, so the user
-  //    never sees a black screen while the initial stream is connecting)
-  overlay.classList.remove('hidden');
-  msg.innerText = isAutoplay ? `Loading ${channel.name}...` : `Connecting to ${channel.name}...`;
+// ─── Rendering ───────────────────────────────────────────────────
+function computeVisible() {
+  const q = state.searchQuery.trim().toLowerCase();
+  return state.allChannels.filter(c => {
+    if (!state.workingUrls.has(c.url) && state.probedUrls.has(c.url)) return false;
+    if (!state.includeGerman && c.category === 'German') return false;
+    if (state.activeFilter !== 'all' && c.category !== state.activeFilter) return false;
+    if (q && !(c.name.toLowerCase().includes(q) || (c.group || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
 
-  if (hlsInstance) {
-    hlsInstance.destroy();
-    hlsInstance = null;
+function render() {
+  const visible = computeVisible();
+  state.visibleChannels = visible;
+
+  // Group by category
+  const grouped = {};
+  for (const ch of visible) {
+    (grouped[ch.category] = grouped[ch.category] || []).push(ch);
   }
 
-  if (Hls.isSupported()) {
-    let hlsRetryCount = 0;
-    hlsInstance = new Hls({
+  // Determine display order
+  const displayCategories = state.activeFilter === 'all'
+    ? CATEGORY_ORDER
+    : [state.activeFilter];
+
+  els.rails.innerHTML = '';
+  let hasContent = false;
+
+  for (const cat of displayCategories) {
+    if (!state.includeGerman && cat === 'German') continue;
+    const items = grouped[cat] || [];
+    if (items.length === 0) continue;
+    hasContent = true;
+    els.rails.appendChild(renderRail(cat, items));
+  }
+
+  els.emptyState.classList.toggle('hidden', hasContent);
+}
+
+function renderRail(category, channels) {
+  const MAX = 40;
+  const displayItems = channels.slice(0, MAX);
+
+  const rail = document.createElement('section');
+  rail.className = 'rail';
+  rail.dataset.category = category;
+  rail.dataset.testid = `rail-${category.toLowerCase()}`;
+
+  const header = document.createElement('div');
+  header.className = 'rail-header';
+  const title = document.createElement('h2');
+  title.className = 'rail-title';
+  title.textContent = category;
+  const count = document.createElement('span');
+  count.className = 'rail-count';
+  count.textContent = channels.length > MAX ? `${MAX}+ of ${channels.length}` : `${channels.length} channels`;
+  header.appendChild(title);
+  header.appendChild(count);
+  rail.appendChild(header);
+
+  const track = document.createElement('div');
+  track.className = 'rail-track';
+  displayItems.forEach(ch => track.appendChild(renderCard(ch)));
+  rail.appendChild(track);
+
+  return rail;
+}
+
+function renderCard(channel) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.tabIndex = 0;
+  card.dataset.testid = `channel-card-${channel.id}`;
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-label', `Play ${channel.name}`);
+
+  const poster = document.createElement('div');
+  poster.className = 'card-poster';
+
+  if (channel.logo) {
+    const img = document.createElement('img');
+    img.src = channel.logo;
+    img.alt = channel.name;
+    img.loading = 'lazy';
+    img.onerror = () => {
+      poster.classList.add('no-logo');
+      poster.innerHTML = '';
+      const initials = getInitials(channel.name);
+      const [ga, gb] = gradientFor(channel.name);
+      poster.style.setProperty('--gradient-a', ga);
+      poster.style.setProperty('--gradient-b', gb);
+      const div = document.createElement('div');
+      div.className = 'card-initials';
+      div.textContent = initials;
+      poster.appendChild(div);
+    };
+    poster.appendChild(img);
+  } else {
+    poster.classList.add('no-logo');
+    const [ga, gb] = gradientFor(channel.name);
+    poster.style.setProperty('--gradient-a', ga);
+    poster.style.setProperty('--gradient-b', gb);
+    const div = document.createElement('div');
+    div.className = 'card-initials';
+    div.textContent = getInitials(channel.name);
+    poster.appendChild(div);
+  }
+  card.appendChild(poster);
+
+  const live = document.createElement('span');
+  live.className = 'card-badge-live';
+  live.textContent = 'LIVE';
+  card.appendChild(live);
+
+  const playIcon = document.createElement('div');
+  playIcon.className = 'card-play-icon';
+  playIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  card.appendChild(playIcon);
+
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
+  const name = document.createElement('div');
+  name.className = 'card-name';
+  name.textContent = channel.name;
+  const group = document.createElement('div');
+  group.className = 'card-group';
+  group.textContent = channel.group || channel.category;
+  meta.appendChild(name);
+  meta.appendChild(group);
+  card.appendChild(meta);
+
+  card.addEventListener('click', () => playChannel(channel));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      playChannel(channel);
+    }
+  });
+
+  return card;
+}
+
+function getInitials(name) {
+  if (!name) return 'TV';
+  const clean = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + (parts[1][0] || '')).toUpperCase();
+}
+
+const GRADIENTS = [
+  ['#e11d48', '#7c2d12'], ['#dc2626', '#7f1d1d'], ['#ea580c', '#7c2d12'],
+  ['#7c3aed', '#4c1d95'], ['#0ea5e9', '#0c4a6e'], ['#059669', '#064e3b'],
+  ['#c026d3', '#701a75'], ['#0891b2', '#164e63'], ['#d97706', '#78350f']
+];
+function gradientFor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return GRADIENTS[Math.abs(h) % GRADIENTS.length];
+}
+
+// ─── Hero ────────────────────────────────────────────────────────
+const HERO_IMAGES = {
+  Movies: 'https://images.pexels.com/photos/3379932/pexels-photo-3379932.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=1600',
+  Sports: 'https://images.pexels.com/photos/35898730/pexels-photo-35898730.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=1600',
+  Music:  'https://images.pexels.com/photos/26447525/pexels-photo-26447525.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=1600',
+  Hindi:  'https://images.pexels.com/photos/3379932/pexels-photo-3379932.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=1600',
+  German: 'https://images.pexels.com/photos/26447525/pexels-photo-26447525.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=1600',
+  all:    'https://images.pexels.com/photos/3379932/pexels-photo-3379932.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=1600'
+};
+
+function renderHero() {
+  const cat = state.activeFilter === 'all' ? 'Movies' : state.activeFilter;
+  const workingChannels = state.allChannels.filter(c =>
+    (!state.probedUrls.has(c.url) || state.workingUrls.has(c.url)) &&
+    c.category === cat &&
+    !!c.name
+  );
+  const featured = workingChannels[Math.floor(Math.random() * Math.min(10, workingChannels.length))] || workingChannels[0];
+
+  els.heroImage.style.backgroundImage = `url(${HERO_IMAGES[cat] || HERO_IMAGES.all})`;
+
+  if (featured) {
+    els.heroEyebrow.textContent = `${cat.toUpperCase()} · LIVE NOW`;
+    els.heroTitle.textContent = featured.name;
+    els.heroDesc.textContent = `${featured.group || cat} — streaming live. Sit back and enjoy a Netflix-style live TV experience across all your favorite categories.`;
+    els.heroPlay.onclick = () => playChannel(featured);
+  } else {
+    els.heroEyebrow.textContent = 'IPTVFLIX · LIVE TV';
+    els.heroTitle.textContent = 'Netflix-style Live Television';
+    els.heroDesc.textContent = 'Movies, Sport, Music, Hindi and German live channels — geo-blocked streams already removed for you.';
+    els.heroPlay.onclick = () => {
+      if (state.visibleChannels[0]) playChannel(state.visibleChannels[0]);
+    };
+  }
+}
+
+// ─── HLS Player ──────────────────────────────────────────────────
+function playChannel(channel) {
+  if (!channel) return;
+  state.currentChannel = channel;
+
+  els.playerModal.classList.remove('hidden');
+  els.playerOverlay.classList.remove('hidden');
+  els.playerStatus.textContent = `Connecting to ${channel.name}…`;
+  els.playerTitle.textContent = channel.name;
+  els.playerCategory.textContent = `${channel.category}${channel.group ? ' · ' + channel.group : ''}`;
+  if (channel.logo) {
+    els.playerLogo.src = channel.logo;
+    els.playerLogo.style.display = 'block';
+    els.playerLogo.onerror = () => { els.playerLogo.style.display = 'none'; };
+  } else {
+    els.playerLogo.style.display = 'none';
+  }
+
+  const video = els.player;
+  video.pause();
+  try { video.removeAttribute('src'); video.load(); } catch (e) {}
+
+  if (state.hlsInstance) { state.hlsInstance.destroy(); state.hlsInstance = null; }
+
+  if (window.Hls && Hls.isSupported()) {
+    let retries = 0;
+    state.hlsInstance = new Hls({
       enableWorker: true,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 120,
+      maxBufferLength: 30,
       lowLatencyMode: false,
-      abrEwmaDefaultEstimate: 500000,
-      capLevelToPlayerSize: true,
-      startLevel: 0 // Force start at lowest bitrate for instant loading
+      capLevelToPlayerSize: true
     });
-    hlsInstance.loadSource(channel.url);
-    hlsInstance.attachMedia(video);
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-      hlsRetryCount = 0;
-      video.play().catch(err => {
-        console.warn('Playback block auto-play policy: ', err);
-      });
+    state.hlsInstance.loadSource(channel.url);
+    state.hlsInstance.attachMedia(video);
+    state.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().catch(err => console.warn('Autoplay blocked:', err));
     });
-    hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-      console.warn('Hls error details:', data);
-      if (data.fatal) {
-        hlsRetryCount++;
-        // Give up after 3 retries to avoid infinite black-screen loops
-        if (hlsRetryCount > 3) {
-          console.error('Max HLS retries reached. Giving up on this stream.');
-          hlsInstance.destroy();
-          hlsInstance = null;
-          msg.innerText = `Unable to play "${channel.name}" — stream may be offline or blocked.`;
-          overlay.classList.remove('hidden');
-          return;
-        }
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            console.log(`Fatal network error (attempt ${hlsRetryCount}/3). Attempting to recover...`);
-            hlsInstance.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            console.log(`Fatal media error (attempt ${hlsRetryCount}/3). Attempting to recover...`);
-            hlsInstance.recoverMediaError();
-            break;
-          default:
-            console.error('Unrecoverable player error. Details:', data.details);
-            hlsInstance.destroy();
-            hlsInstance = null;
-            msg.innerText = `Playback failed: ${data.details} (CORS or Geo-blocked)`;
-            overlay.classList.remove('hidden');
-            break;
-        }
+    state.hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+      if (!data.fatal) return;
+      retries++;
+      if (retries > 3) {
+        els.playerStatus.textContent = `Unable to play — this stream may be offline or region-locked.`;
+        els.playerOverlay.classList.remove('hidden');
+        return;
+      }
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) state.hlsInstance.startLoad();
+      else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) state.hlsInstance.recoverMediaError();
+      else {
+        els.playerStatus.textContent = `Playback error: ${data.details}`;
+        els.playerOverlay.classList.remove('hidden');
       }
     });
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    // Native Apple HLS (Safari, iOS, and LG webOS)
+    // Native HLS (Safari, iOS, LG webOS)
     video.src = channel.url;
     video.play().catch(err => {
-      console.warn('Native HLS playback failed:', err);
-      msg.innerText = `Playback failed: Native Player Error (CORS, Geo-blocked, or unsupported format)`;
-      overlay.classList.remove('hidden');
+      els.playerStatus.textContent = 'Native playback failed.';
     });
   } else {
-    msg.innerText = 'HLS Streams are not supported in this browser.';
-    overlay.classList.remove('hidden');
+    els.playerStatus.textContent = 'HLS not supported on this device.';
   }
 }
 
-// Toggle Favorite Status of active channel
-function toggleFavoriteActive() {
-  const channel = currentSelectedChannel || currentPlayingChannel;
-  if (!channel) return;
-
-  const favIndex = favoriteUrls.indexOf(channel.url);
-  if (favIndex === -1) {
-    favoriteUrls.push(channel.url);
-    console.log(`[App] Added ${channel.name} to favorites.`);
-  } else {
-    favoriteUrls.splice(favIndex, 1);
-    console.log(`[App] Removed ${channel.name} from favorites.`);
-  }
-  saveFavorites();
-  
-  // Re-build grid to update Favorite badges/rows
-  groupAndRender();
-  
-  // Refresh current banner info
-  updateBanner(channel);
-  
-  // Restore focus grid mapping
-  updateFocus();
+function closePlayer() {
+  els.playerModal.classList.add('hidden');
+  if (state.hlsInstance) { state.hlsInstance.destroy(); state.hlsInstance = null; }
+  try { els.player.pause(); els.player.removeAttribute('src'); els.player.load(); } catch (e) {}
 }
 
-// Fullscreen & Toast Overlay Helpers
-function enterFullscreen() {
-  isFullscreen = true;
-  document.getElementById('app-container').classList.add('fullscreen-active');
-  showChannelToast();
-}
-
-function exitFullscreen() {
-  isFullscreen = false;
-  document.getElementById('app-container').classList.remove('fullscreen-active');
-  hideChannelToast();
-}
-
-function showChannelToast() {
-  const toast = document.getElementById('fullscreen-toast');
-  const channel = currentPlayingChannel;
-  if (!channel) return;
-
-  document.getElementById('toast-channel-name').innerText = channel.name;
-  document.getElementById('toast-channel-category').innerText = channel.group;
-
-  const logoImg = document.getElementById('toast-logo-img');
-  if (channel.logo) {
-    logoImg.src = channel.logo;
-    logoImg.style.display = 'block';
-    logoImg.onerror = () => { logoImg.style.display = 'none'; };
-  } else {
-    logoImg.style.display = 'none';
-  }
-
-  toast.classList.add('visible');
-
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => {
-    toast.classList.remove('visible');
-  }, 3000);
-}
-
-function hideChannelToast() {
-  document.getElementById('fullscreen-toast').classList.remove('visible');
-  if (toastTimeout) clearTimeout(toastTimeout);
-}
-
-function showCustomToast(title, message) {
-  const toast = document.getElementById('fullscreen-toast');
-  if (!toast) return;
-  document.getElementById('toast-channel-name').innerText = title;
-  document.getElementById('toast-channel-category').innerText = message;
-  
-  const logoImg = document.getElementById('toast-logo-img');
-  if (logoImg) logoImg.style.display = 'none';
-
-  toast.classList.add('visible');
-
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => {
-    toast.classList.remove('visible');
-  }, 3000);
-}
-
-function playNextChannel() {
-  if (focusMatrix.length === 0) return;
-  
-  // Flatten focusMatrix to scan across all categories on screen
-  const flatTiles = focusMatrix.flat().filter(tile => tile !== null);
-  if (flatTiles.length === 0) return;
-
-  const currentTile = focusMatrix[activeRowIndex] ? focusMatrix[activeRowIndex][activeColIndex] : null;
-  let currentIndex = currentTile ? flatTiles.indexOf(currentTile) : -1;
-  
-  if (currentIndex === -1 && currentPlayingChannel) {
-    currentIndex = flatTiles.findIndex(tile => {
-      const c = JSON.parse(tile.dataset.channelData);
-      return c.url === currentPlayingChannel.url;
-    });
-  }
-  
-  if (currentIndex === -1) {
-    currentIndex = 0;
-  }
-  
-  const nextIndex = (currentIndex + 1) % flatTiles.length;
-  const nextTile = flatTiles[nextIndex];
-  
-  const nextRow = parseInt(nextTile.dataset.rowIndex, 10);
-  const nextCol = parseInt(nextTile.dataset.colIndex, 10);
-  
-  changeFocus(nextRow, nextCol);
-  const channel = JSON.parse(nextTile.dataset.channelData);
-  playChannel(channel);
-}
-
-function playPrevChannel() {
-  if (focusMatrix.length === 0) return;
-  
-  // Flatten focusMatrix to scan across all categories on screen
-  const flatTiles = focusMatrix.flat().filter(tile => tile !== null);
-  if (flatTiles.length === 0) return;
-
-  const currentTile = focusMatrix[activeRowIndex] ? focusMatrix[activeRowIndex][activeColIndex] : null;
-  let currentIndex = currentTile ? flatTiles.indexOf(currentTile) : -1;
-  
-  if (currentIndex === -1 && currentPlayingChannel) {
-    currentIndex = flatTiles.findIndex(tile => {
-      const c = JSON.parse(tile.dataset.channelData);
-      return c.url === currentPlayingChannel.url;
-    });
-  }
-  
-  if (currentIndex === -1) {
-    currentIndex = 0;
-  }
-  
-  const prevIndex = (currentIndex - 1 + flatTiles.length) % flatTiles.length;
-  const nextTile = flatTiles[prevIndex];
-  
-  const nextRow = parseInt(nextTile.dataset.rowIndex, 10);
-  const nextCol = parseInt(nextTile.dataset.colIndex, 10);
-  
-  changeFocus(nextRow, nextCol);
-  const channel = JSON.parse(nextTile.dataset.channelData);
-  playChannel(channel);
-}
-
-// Keyboard / Remote D-Pad Navigation Engine
-function setupKeyboardNavigation() {
-  // Banner Action Toggle Click handler
-  document.getElementById('favorite-toggle-btn').addEventListener('click', () => {
-    activeBannerIndex = 0;
-    focusZone = 'banner';
-    updateFocus();
-    toggleFavoriteActive();
+// ─── Event Listeners ─────────────────────────────────────────────
+function setupEventListeners() {
+  // Category nav
+  els.nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-item');
+    if (!btn) return;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.activeFilter = btn.dataset.filter;
+    renderHero();
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  document.getElementById('hide-channel-btn').addEventListener('click', () => {
-    activeBannerIndex = 1;
-    focusZone = 'banner';
-    updateFocus();
-    hideActiveChannel();
+  // Search
+  els.searchInput.addEventListener('input', (e) => {
+    state.searchQuery = e.target.value;
+    render();
   });
 
-  // Top Nav Items click handler
-  document.addEventListener('click', (event) => {
-    const navItem = event.target.closest('.nav-item');
-    if (navItem) {
-      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active-filter'));
-      navItem.classList.add('active-filter');
-      activeFilter = navItem.dataset.filter;
-      
-      const menuItems = Array.from(document.querySelectorAll('.nav-item'));
-      activeMenuItemIndex = menuItems.indexOf(navItem);
+  // German toggle
+  els.germanToggle.addEventListener('change', (e) => {
+    state.includeGerman = e.target.checked;
+    // If we're currently filtering by German and turn it off, revert to all
+    if (!state.includeGerman && state.activeFilter === 'German') {
+      state.activeFilter = 'all';
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      const homeBtn = document.querySelector('.nav-item[data-filter="all"]');
+      if (homeBtn) homeBtn.classList.add('active');
+      renderHero();
+    }
+    render();
+  });
 
-      groupAndRender();
-      focusFirstAvailableTile();
+  // Player controls
+  els.playerClose.addEventListener('click', closePlayer);
+  els.playerModal.addEventListener('click', (e) => {
+    // Click on backdrop closes
+    if (e.target.classList.contains('player-backdrop')) closePlayer();
+  });
+
+  // Keyboard: Escape closes modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.keyCode === 461 /* webOS Back */) {
+      if (!els.playerModal.classList.contains('hidden')) {
+        e.preventDefault();
+        closePlayer();
+      }
     }
   });
 
-  document.addEventListener('keydown', (event) => {
-    const menuItems = Array.from(document.querySelectorAll('.nav-item'));
-
-    // Intercept Back keys for custom navigation and app exit control
-    const isBackKey = event.key === 'Backspace' || 
-                      event.key === 'Escape' || 
-                      event.key === 'BrowserBack' || 
-                      event.key === 'Back' || 
-                      event.keyCode === 461;
-
-    if (isBackKey) {
-      if (isFullscreen) {
-        exitFullscreen();
-        event.preventDefault();
-      } else {
-        // Exit/close the application if we are on the dashboard
-        window.close();
-      }
-      return;
-    }
-
-    if (isFullscreen) {
-      // Capture Green key (404) or F/f key for Favorite toggle
-      if (event.keyCode === 404 || event.key === 'f' || event.key === 'F') {
-        const channel = currentPlayingChannel;
-        if (channel) {
-          toggleFavoriteActive();
-          const isFav = favoriteUrls.includes(channel.url);
-          showCustomToast(isFav ? "Added to Favorites" : "Removed from Favorites", channel.name);
-        }
-        event.preventDefault();
-        return;
-      }
-      
-      // Capture Red key (403) or D/d key for Hide/Remove
-      if (event.keyCode === 403 || event.key === 'd' || event.key === 'D') {
-        const channel = currentPlayingChannel;
-        if (channel) {
-          showCustomToast("Channel Removed", channel.name);
-          hideActiveChannel();
-          if (!currentPlayingChannel) {
-            exitFullscreen();
-          }
-        }
-        event.preventDefault();
-        return;
-      }
-
-      switch (event.key) {
-        case 'ArrowRight':
-        case 'ArrowDown':
-          playNextChannel();
-          event.preventDefault();
-          break;
-        case 'ArrowLeft':
-        case 'ArrowUp':
-          playPrevChannel();
-          event.preventDefault();
-          break;
-        case 'Enter':
-          showChannelToast();
-          event.preventDefault();
-          break;
-      }
-      return;
-    }
-
-    if (focusZone === 'menu') {
-      switch (event.key) {
-        case 'ArrowLeft':
-          if (activeMenuItemIndex > 0) {
-            activeMenuItemIndex--;
-            updateFocus();
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowRight':
-          if (activeMenuItemIndex < menuItems.length - 1) {
-            activeMenuItemIndex++;
-            updateFocus();
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowDown':
-          if (activeFilter === 'Search') {
-            focusZone = 'search';
-          } else {
-            focusZone = 'banner';
-            activeBannerIndex = 0;
-          }
-          updateFocus();
-          event.preventDefault();
-          break;
-        case 'Enter':
-          // Select and filter by category
-          document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active-filter'));
-          menuItems[activeMenuItemIndex].classList.add('active-filter');
-          activeFilter = menuItems[activeMenuItemIndex].dataset.filter;
-          
-          if (activeFilter === 'Search') {
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) searchInput.value = '';
-            focusZone = 'search';
-          } else {
-            focusZone = 'grid';
-          }
-          
-          groupAndRender();
-          if (activeFilter !== 'Search') {
-            focusFirstAvailableTile();
-          } else {
-            updateFocus();
-          }
-          event.preventDefault();
-          break;
-      }
-    } else if (focusZone === 'search') {
-      switch (event.key) {
-        case 'ArrowDown':
-          if (focusMatrix.length > 0 && focusMatrix[0].length > 0) {
-            focusZone = 'grid';
-            activeRowIndex = 0;
-            activeColIndex = 0;
-            changeFocus(activeRowIndex, activeColIndex);
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowUp':
-          focusZone = 'menu';
-          activeMenuItemIndex = menuItems.findIndex(el => el.dataset.filter === 'Search');
-          if (activeMenuItemIndex === -1) activeMenuItemIndex = 0;
-          updateFocus();
-          event.preventDefault();
-          break;
-      }
-      // Let other keystrokes fall through to native typing
-    } else if (focusZone === 'banner') {
-      switch (event.key) {
-        case 'ArrowLeft':
-          if (activeBannerIndex > 0) {
-            activeBannerIndex--;
-            updateFocus();
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowRight':
-          if (activeBannerIndex < 1) {
-            activeBannerIndex++;
-            updateFocus();
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowUp':
-          focusZone = 'menu';
-          updateFocus();
-          event.preventDefault();
-          break;
-        case 'ArrowDown':
-          if (focusMatrix.length > 0 && focusMatrix[0].length > 0) {
-            focusZone = 'grid';
-            activeRowIndex = 0;
-            activeColIndex = 0;
-            changeFocus(activeRowIndex, activeColIndex);
-          }
-          event.preventDefault();
-          break;
-        case 'Enter':
-          if (activeBannerIndex === 0) {
-            toggleFavoriteActive();
-          } else {
-            hideActiveChannel();
-          }
-          event.preventDefault();
-          break;
-      }
-    } else if (focusZone === 'grid') {
-      switch (event.key) {
-        case 'ArrowLeft':
-          if (activeColIndex > 0) {
-            changeFocus(activeRowIndex, activeColIndex - 1);
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowRight':
-          const rowRight = focusMatrix[activeRowIndex];
-          if (rowRight && activeColIndex < rowRight.length - 1) {
-            changeFocus(activeRowIndex, activeColIndex + 1);
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowUp':
-          if (activeRowIndex > 0) {
-            const nextRow = activeRowIndex - 1;
-            const nextRowTiles = focusMatrix[nextRow];
-            const nextCol = nextRowTiles ? Math.min(activeColIndex, nextRowTiles.length - 1) : 0;
-            changeFocus(nextRow, nextCol);
-          } else {
-            if (activeFilter === 'Search') {
-              focusZone = 'search';
-            } else {
-              focusZone = 'banner';
-              activeBannerIndex = 0;
-            }
-            updateFocus();
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowDown':
-          if (activeRowIndex < focusMatrix.length - 1) {
-            const nextRow = activeRowIndex + 1;
-            const nextRowTiles = focusMatrix[nextRow];
-            const nextCol = nextRowTiles ? Math.min(activeColIndex, nextRowTiles.length - 1) : 0;
-            changeFocus(nextRow, nextCol);
-          }
-          event.preventDefault();
-          break;
-        case 'Enter':
-          const rowEnter = focusMatrix[activeRowIndex];
-          const focusedTile = rowEnter ? rowEnter[activeColIndex] : null;
-          if (focusedTile) {
-            const channel = JSON.parse(focusedTile.dataset.channelData);
-            playChannel(channel);
-          }
-          event.preventDefault();
-          break;
-      }
-    }
-
-    // [F] Key shortcut to toggle favorite of selected channel from any zone (disabled during search typing)
-    if (focusZone !== 'search' && (event.key === 'f' || event.key === 'F')) {
-      // Don't toggle favorite when in fullscreen since it's already handled there
-      if (!isFullscreen) {
-        toggleFavoriteActive();
-        event.preventDefault();
-      }
-    }
-
-    // [D] Key shortcut to hide/delete selected channel from any zone (disabled during search typing)
-    if (focusZone !== 'search' && (event.key === 'd' || event.key === 'D')) {
-      // Don't delete when in fullscreen since it's already handled there
-      if (!isFullscreen) {
-        hideActiveChannel();
-        event.preventDefault();
-      }
-    }
+  // Video events
+  els.player.addEventListener('playing', () => els.playerOverlay.classList.add('hidden'));
+  els.player.addEventListener('waiting', () => {
+    els.playerStatus.textContent = 'Buffering…';
+    els.playerOverlay.classList.remove('hidden');
   });
-}
 
-// Background DNS Pre-warming and HTTP manifest/segment pre-caching for adjacent channels
-function preloadAdjacentChannels() {
-  if (focusMatrix.length === 0) return;
-  const currentRow = focusMatrix[activeRowIndex];
-  if (!currentRow || currentRow.length === 0) return;
-
-  const nextIndex = (activeColIndex + 1) % currentRow.length;
-  const prevIndex = (activeColIndex - 1 + currentRow.length) % currentRow.length;
-
-  const nextChannel = JSON.parse(currentRow[nextIndex].dataset.channelData);
-  const prevChannel = JSON.parse(currentRow[prevIndex].dataset.channelData);
-
-  // Pre-warm connections and pre-cache manifests/first segment for next and previous channels
-  prefetchChannel(nextChannel);
-  prefetchChannel(prevChannel);
-}
-
-// Highly efficient background playlist and first-segment prefetching
-async function prefetchChannel(channel) {
-  if (!channel || !channel.url) return;
-
-  try {
-    const url = channel.url;
-    const domain = new URL(url).origin;
-
-    // 1. Inject link rel=preconnect to warm up DNS & SSL handshake
-    let preconnect = document.querySelector(`link[href="${domain}"]`);
-    if (!preconnect) {
-      preconnect = document.createElement('link');
-      preconnect.rel = 'preconnect';
-      preconnect.href = domain;
-      preconnect.crossOrigin = 'anonymous';
-      document.head.appendChild(preconnect);
-    }
-
-    // 2. Try fetching the playlist to parse its first segment
-    let text = "";
-    try {
-      const response = await fetch(url, { credentials: 'omit' });
-      if (response.ok) {
-        text = await response.text();
-      }
-    } catch (e) {
-      // CORS block or network failure - do an opaque fetch to cache the playlist file itself
-      fetch(url, { method: 'GET', mode: 'no-cors', credentials: 'omit' }).catch(() => {});
-    }
-
-    if (!text) return;
-
-    // Parse the manifest for segments or sub-playlists
-    const lines = text.split(/\r?\n/);
-    let firstSegmentUrl = null;
-    let firstPlaylistUrl = null;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line || line.startsWith('#')) continue;
-
-      // Resolve relative URL
-      let absoluteUrl = line;
-      if (!line.startsWith('http://') && !line.startsWith('https://')) {
-        absoluteUrl = new URL(line, url).href;
-      }
-
-      if (line.includes('.m3u8') || line.includes('manifest')) {
-        if (!firstPlaylistUrl) firstPlaylistUrl = absoluteUrl;
-      } else {
-        if (!firstSegmentUrl) {
-          firstSegmentUrl = absoluteUrl;
-          break; // Found the segment!
-        }
-      }
-    }
-
-    // If we found a sub-playlist, fetch it (one level of recursion)
-    if (firstPlaylistUrl) {
-      try {
-        const subResp = await fetch(firstPlaylistUrl, { credentials: 'omit' });
-        if (subResp.ok) {
-          const subText = await subResp.text();
-          const subLines = subText.split(/\r?\n/);
-          for (let i = 0; i < subLines.length; i++) {
-            const subLine = subLines[i].trim();
-            if (!subLine || subLine.startsWith('#')) continue;
-
-            let absoluteSubUrl = subLine;
-            if (!subLine.startsWith('http://') && !subLine.startsWith('https://')) {
-              absoluteSubUrl = new URL(subLine, firstPlaylistUrl).href;
-            }
-
-            if (!subLine.includes('.m3u8') && !subLine.includes('manifest')) {
-              firstSegmentUrl = absoluteSubUrl;
-              break;
-            }
-          }
-        }
-      } catch (e) {}
-    }
-
-    // 3. Pre-fetch first segment chunk (first 256KB) to warm cache
-    if (firstSegmentUrl) {
-      fetch(firstSegmentUrl, {
-        method: 'GET',
-        credentials: 'omit',
-        headers: { 'Range': 'bytes=0-262143' }
-      }).catch(() => {
-        // Fallback to fetching the entire segment if Range is not supported
-        fetch(firstSegmentUrl, { method: 'GET', credentials: 'omit', mode: 'no-cors' }).catch(() => {});
-      });
-    }
-  } catch (e) {
-    console.warn('[Preload] Failed to prefetch channel:', channel.name, e);
-  }
+  // Header scroll effect
+  window.addEventListener('scroll', () => {
+    els.topbar.classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
 }
