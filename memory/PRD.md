@@ -41,6 +41,24 @@
 - ✅ Search + category jump-nav + hero Watch Now.
 - ✅ Tested end-to-end: backend 11/11, frontend 100% — zero bugs.
 
+### Jan 12, 2026 — LG webOS layout aligned to Sony Bravia / Xiaomi (React Native) ✅
+User feedback: *"the sony bravia layout is good but the webos version for lg looks very shitty please make to align with sony and xiaomi tv."*
+- Fully rewrote `/app/web/index.html`, `/app/web/style.css`, `/app/web/app.js` (mirror of `src/components/MainLayout.tsx` + `ChannelRow.tsx` + `TVChannelTile.tsx`).
+- Rebranded from **IPTVFlix → CastifyTV** (red "Castify" + white "TV" logo).
+- Nav menu now matches native: `Home · Channels · Favorites · Movies · Music`.
+- Replaced Netflix-style full-width hero with **split-screen top panel**:
+  - Left 50%: metadata banner (● LIVE + FHD 1080P badges, channel name, category in red, description, `+ My Favorites` + `✕ Hide Channel` buttons).
+  - Right 50%: inline live HLS.js video with floating `⛶ Fullscreen` button (bottom-right).
+- Category rails below now use **portrait 2:3 poster cards (145×210)** with per-channel gradient background, centered logo, PLAYING badge (red pulse), gold ★ favorite badge, 1.12 scale + 3px white focus border — pixel-identical to `TVChannelTile.tsx`.
+- **Favorites-first ordering**: `★ Favorites - {category}` rails render before standard category rails (mirrors `MainLayout` `groupedCategories`).
+- **Autoplay 9XM ▸ Zee Music ▸ B4U Music ▸ first available** on startup.
+- **localStorage** persistence for favorites (`castifytv.favorites`) and hidden (`castifytv.hidden`); default-favorites seed keywords (`9xm`, `zee music`, `b4u music`) applied only on first launch (`castifytv.defaults_initialized`).
+- **D-pad navigation**: 2D grid handler (Up/Down between navbar/actions/rails, Left/Right within a rail, Enter/OK plays). BACK/ESC (webOS key 461, Samsung 10009) exits fullscreen.
+- **Fullscreen mode**: floating button toggles `.is-fullscreen` on `#app` → hides navbar/banner/rails, video fills viewport; hint auto-fades after 3 s.
+- Verified live: 5 rails, 163 cards render, banner updates on card focus, PLAYING badge tracks active channel, ✓ My Favorites turns red when favorited.
+
+
+
 ## Prioritized Backlog
 - **P2** — Rewrite `refresh_channels` to insert into a temp collection then rename atomically (avoid empty DB window if insert fails mid-flight).
 - **P2** — 6-hour scheduled re-probe (APScheduler).
