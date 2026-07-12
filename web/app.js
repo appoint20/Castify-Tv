@@ -115,7 +115,10 @@ const els = {
   rails: $('rails'),
   emptyState: $('empty-state'),
   // fullscreen
-  fsOverlay: $('fullscreen-overlay')
+  fsOverlay: $('fullscreen-overlay'),
+  // hint bar
+  hintBar: $('hint-bar'),
+  hintBackDesc: $('hint-back-desc')
 };
 
 // ═══ Bootstrap ═══
@@ -359,11 +362,35 @@ function computeGrouped() {
     return true;
   });
 
-  // Apply top-nav filter
+  // ── "Channels" view: single alphabetical A-Z grid of ALL channels ──
+  if (state.activeFilter === 'channels') {
+    const sorted = [...visible].sort((a, b) =>
+      (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
+    );
+    // Bucket by first letter (0-9 → "#")
+    const buckets = {};
+    sorted.forEach(c => {
+      const first = (c.name || '?')[0].toUpperCase();
+      const key = /[A-Z]/.test(first) ? first : '#';
+      (buckets[key] = buckets[key] || []).push(c);
+    });
+    const letters = Object.keys(buckets).sort((a, b) => {
+      if (a === '#') return 1;
+      if (b === '#') return -1;
+      return a.localeCompare(b);
+    });
+    return letters.map(letter => ({
+      title: letter,
+      channels: buckets[letter],
+      layout: 'grid'
+    }));
+  }
+
+  // Apply top-nav filter (Home / Favorites / Category)
   let filtered = visible;
   if (state.activeFilter === 'favorites') {
     filtered = visible.filter(c => state.favorites.has(c.url));
-  } else if (state.activeFilter !== 'all' && state.activeFilter !== 'channels') {
+  } else if (state.activeFilter !== 'all') {
     filtered = visible.filter(c => c.category === state.activeFilter);
   }
 
@@ -401,20 +428,21 @@ function render() {
 
   groups.forEach(g => {
     if (g.channels.length === 0) return;
-    els.rails.appendChild(renderRail(g.title, g.channels));
+    els.rails.appendChild(renderRail(g.title, g.channels, g.layout));
   });
 }
 
-function renderRail(title, channels) {
-  const MAX = 40;
-  const displayItems = channels.slice(0, MAX);
+function renderRail(title, channels, layout) {
+  const isGrid = layout === 'grid';
+  // Grid view (Channels A-Z) shows all channels; carousel view limits to 40
+  const displayItems = isGrid ? channels : channels.slice(0, 40);
 
   const rail = document.createElement('section');
-  rail.className = 'rail';
+  rail.className = 'rail' + (isGrid ? ' rail-grid-section' : '');
   rail.dataset.testid = `rail-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
   const header = document.createElement('div');
-  header.className = 'rail-header';
+  header.className = 'rail-header' + (isGrid ? ' rail-header-letter' : '');
   const titleEl = document.createElement('h2');
   titleEl.className = 'rail-title';
   titleEl.textContent = title;
@@ -426,7 +454,7 @@ function renderRail(title, channels) {
   rail.appendChild(header);
 
   const track = document.createElement('div');
-  track.className = 'rail-track';
+  track.className = isGrid ? 'rail-grid' : 'rail-track';
   displayItems.forEach(ch => track.appendChild(renderCard(ch)));
   rail.appendChild(track);
 
@@ -642,6 +670,7 @@ function playChannel(channel) {
   els.playerStatus.textContent = `Connecting to ${channel.name}…`;
 
   updateBanner();
+  updateHintBar();
   // Re-render rails so PLAYING badge moves to correct card
   render();
 
@@ -694,6 +723,7 @@ function stopPlayback() {
   els.noActiveStream.classList.remove('hidden');
   els.playerOverlay.classList.add('hidden');
   updateBanner();
+  updateHintBar();
   render();
 }
 
@@ -704,6 +734,7 @@ function toggleFullscreen() {
   state.isFullscreen = !state.isFullscreen;
   els.app.classList.toggle('is-fullscreen', state.isFullscreen);
   els.fsOverlay.classList.toggle('hidden', !state.isFullscreen);
+  updateHintBar();
   // hint auto-hide after 3s
   if (state.isFullscreen) {
     setTimeout(() => els.fsOverlay.classList.add('hidden'), 3000);
@@ -764,18 +795,59 @@ function handleKeyDown(e) {
   const key = e.key;
   const code = e.keyCode;
 
-  // BACK / ESC — exit fullscreen or stop playback
-  if (key === 'Escape' || code === 461 /* webOS Back */ || code === 10009 /* Samsung Back */) {
+  // ── BACK (webOS 461, Samsung 10009, ESC) — contextual ──
+  if (key === 'Escape' || code === 461 || code === 10009) {
     if (state.isFullscreen) {
       e.preventDefault();
       toggleFullscreen();
       return;
     }
+    if (state.activeChannel) {
+      e.preventDefault();
+      stopPlayback();
+      return;
+    }
   }
 
-  // D-pad arrow keys — build a simple 2D grid navigation
+  // ── LG Magic Remote color buttons ──
+  // RED (403) → toggle favorite on focused/active channel
+  if (code === 403) {
+    e.preventDefault();
+    toggleFavoriteActive();
+    flashHint('❤ Favorite toggled');
+    return;
+  }
+  // GREEN (404) → toggle fullscreen
+  if (code === 404) {
+    e.preventDefault();
+    if (state.activeChannel) toggleFullscreen();
+    return;
+  }
+
+  // D-pad arrow keys — 2D navigation
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)) {
     handleDpad(key, e);
+  }
+}
+
+// Briefly flash a hint message on top of the hint bar
+let _hintTimer = null;
+function flashHint(msg) {
+  if (!els.hintBar) return;
+  els.hintBar.dataset.flash = msg;
+  els.hintBar.classList.add('flash');
+  clearTimeout(_hintTimer);
+  _hintTimer = setTimeout(() => els.hintBar.classList.remove('flash'), 1400);
+}
+
+function updateHintBar() {
+  if (!els.hintBackDesc) return;
+  if (state.isFullscreen) {
+    els.hintBackDesc.textContent = 'Exit Fullscreen';
+  } else if (state.activeChannel) {
+    els.hintBackDesc.textContent = 'Stop stream';
+  } else {
+    els.hintBackDesc.textContent = 'Home';
   }
 }
 
@@ -818,13 +890,65 @@ function handleDpad(dir, event) {
     return;
   }
 
-  // Card: navigate between cards, up to banner actions, down to next rail
+  // Card: navigate between cards; grid vs. rail-track behaves differently
   if (isCard) {
-    const rail = active.closest('.rail-track');
-    if (!rail) return;
-    const cards = [...rail.querySelectorAll('.card')];
+    const trackEl = active.parentElement; // either .rail-track or .rail-grid
+    if (!trackEl) return;
+    const isGrid = trackEl.classList.contains('rail-grid');
+    const cards = [...trackEl.querySelectorAll('.card')];
     const idx = cards.indexOf(active);
 
+    // ── GRID layout (Channels A-Z) — 2D wrap navigation by geometry ──
+    if (isGrid) {
+      if (dir === 'ArrowLeft' && idx > 0) { event.preventDefault(); cards[idx-1].focus(); return; }
+      if (dir === 'ArrowRight' && idx < cards.length - 1) { event.preventDefault(); cards[idx+1].focus(); return; }
+
+      const currentRect = active.getBoundingClientRect();
+      const currentTop = currentRect.top;
+      const currentCenterX = currentRect.left + currentRect.width / 2;
+
+      // Collect all cards across all grids/tracks visible on the page
+      const allCards = [...document.querySelectorAll('.card')];
+
+      if (dir === 'ArrowDown') {
+        event.preventDefault();
+        // Find cards strictly below the current row, then closest by X
+        const below = allCards
+          .map(c => ({ c, r: c.getBoundingClientRect() }))
+          .filter(x => x.r.top > currentTop + 5);
+        if (below.length === 0) return;
+        // Next row = smallest top among "below"
+        const nextRowTop = Math.min(...below.map(x => x.r.top));
+        const rowCards = below.filter(x => Math.abs(x.r.top - nextRowTop) < 10);
+        const best = rowCards.reduce((best, x) => {
+          const dx = Math.abs(x.r.left + x.r.width/2 - currentCenterX);
+          return (!best || dx < best.dx) ? { c: x.c, dx } : best;
+        }, null);
+        if (best) best.c.focus();
+        return;
+      }
+      if (dir === 'ArrowUp') {
+        event.preventDefault();
+        const above = allCards
+          .map(c => ({ c, r: c.getBoundingClientRect() }))
+          .filter(x => x.r.top < currentTop - 5);
+        if (above.length === 0) {
+          // At top row → jump up to letter's rail header? or to banner buttons
+          els.favBtn.focus();
+          return;
+        }
+        const prevRowTop = Math.max(...above.map(x => x.r.top));
+        const rowCards = above.filter(x => Math.abs(x.r.top - prevRowTop) < 10);
+        const best = rowCards.reduce((best, x) => {
+          const dx = Math.abs(x.r.left + x.r.width/2 - currentCenterX);
+          return (!best || dx < best.dx) ? { c: x.c, dx } : best;
+        }, null);
+        if (best) best.c.focus();
+        return;
+      }
+    }
+
+    // ── RAIL-TRACK (carousel) — original behavior ──
     if (dir === 'ArrowLeft' && idx > 0) { event.preventDefault(); cards[idx-1].focus(); return; }
     if (dir === 'ArrowRight' && idx < cards.length - 1) { event.preventDefault(); cards[idx+1].focus(); return; }
 

@@ -70,3 +70,17 @@ User feedback: *"the sony bravia layout is good but the webos version for lg loo
 ## Next Tasks
 - 6-hour scheduled re-probe.
 - Deep-link share URL.
+
+### Jan 12, 2026 (b) — LG webOS: Channels A-Z view + Remote hint bar ✅
+User follow-up: *"Add a Channels all-channels view (currently nav item behaves like Home). Wire an explicit Back on-screen hint for LG magic remote users."*
+- **`Channels` nav item** now shows an **A-Z alphabetical grid** of every visible channel — 27 letter buckets (A-Z + `#` for non-alpha), 873 cards laid out in a flex-wrap grid (~11 per row on 1920×1080). Section headers use red 22 px letter titles + channel count.
+- **D-pad grid navigation**: added geometric row-based nav — `ArrowUp/Down` finds the closest card by X-coordinate in the previous/next row (works across letter section boundaries); `ArrowLeft/Right` moves through siblings.
+- **Persistent Remote hint bar** (`.hint-bar`, `data-testid="hint-bar"`) fixed at bottom with 4 LG Magic Remote hints:
+  - `◀ BACK` · contextual label (`Stop stream` while playing, `Exit Fullscreen` in fullscreen, `Home` otherwise).
+  - `● RED` (403) · Toggle Favorite.
+  - `● GREEN` (404) · Fullscreen.
+  - `OK` · Play channel.
+- Wired **LG Magic Remote color buttons** (keyCode 403/404) to favorite toggle and fullscreen.
+- **BACK/ESC/webOS 461/Samsung 10009** now cascades: fullscreen → exit fullscreen → active playback → stop playback → (else no-op). Hint text and PLAYING badge update accordingly.
+- Hint bar auto-hides during fullscreen mode.
+

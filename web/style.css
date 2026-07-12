@@ -401,7 +401,7 @@ button, input {
    ═══════════════════════════════════════════════════════════════ */
 .rails {
   flex: 1;
-  padding: 12px 0 32px 0;
+  padding: 12px 0 60px 0; /* extra bottom padding so last row clears the hint bar */
   background: var(--bg);
   overflow-y: auto;
   overflow-x: hidden;
@@ -448,6 +448,26 @@ button, input {
   -ms-overflow-style: none;
 }
 .rail-track::-webkit-scrollbar { display: none; }
+
+/* ── Channels A-Z grid view ── */
+.rail-grid-section .rail-header {
+  padding-top: 8px;
+  margin-bottom: 0;
+  margin-left: 22px;
+}
+.rail-header-letter .rail-title {
+  color: var(--red);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.rail-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 4px;
+  padding: 14px 16px 22px 16px;
+  overflow: visible;
+}
 
 /* ── Channel Card (portrait poster, 2:3 aspect) ── */
 .card {
@@ -601,7 +621,8 @@ button, input {
    ═══════════════════════════════════════════════════════════════ */
 .app.is-fullscreen .navbar,
 .app.is-fullscreen .rails,
-.app.is-fullscreen .banner-container {
+.app.is-fullscreen .banner-container,
+.app.is-fullscreen .hint-bar {
   display: none !important;
 }
 .app.is-fullscreen .top-panel {
@@ -632,6 +653,70 @@ button, input {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   5b. Remote hint bar (LG Magic Remote guide, persistent bottom strip)
+   ═══════════════════════════════════════════════════════════════ */
+.hint-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 8px 24px;
+  background: linear-gradient(180deg, rgba(20,20,20,0) 0%, rgba(0,0,0,0.85) 55%, #000 100%);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  pointer-events: none; /* purely informative */
+  animation: fadeIn 500ms ease-out;
+}
+.hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gray-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.hint-item .hint-desc {
+  color: var(--gray);
+  font-weight: 500;
+}
+.key-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 7px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  color: #FFFFFF;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.key-glyph.key-back {
+  background: rgba(255,255,255,0.15);
+  font-size: 10px;
+}
+.key-glyph.key-red {
+  background: #E50914;
+  border-color: #F40612;
+  color: #FFFFFF;
+  font-size: 8px;
+}
+.key-glyph.key-green {
+  background: #1DB954;
+  border-color: #1ED760;
+  color: #FFFFFF;
+  font-size: 8px;
 }
 
 /* ═══════════════════════════════════════════════════════════════
