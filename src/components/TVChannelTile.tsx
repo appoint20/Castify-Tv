@@ -194,11 +194,12 @@ const CARD_HEIGHT = 210; // ~2:3 portrait poster ratio (Netflix film card)
 
 const styles = StyleSheet.create({
   pressableWrapper: {
-    // Extra margin for scale animation headroom on TV
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
     marginHorizontal: 6,
     marginVertical: 14,
     borderRadius: 6,
-    overflow: Platform.OS === 'android' ? 'visible' : 'visible',
+    overflow: 'visible',
   },
   card: {
     width: CARD_WIDTH,

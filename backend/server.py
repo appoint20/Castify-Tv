@@ -26,7 +26,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
@@ -360,3 +361,90 @@ async def get_hero() -> Dict[str, Any]:
         if doc:
             return {"channel": doc}
     return {"channel": None}
+
+
+# ─── VPN Proxy & Smart-Routing Endpoints ─────────────────────────────────
+from urllib.parse import urljoin, quote
+
+@app.get("/api/config")
+async def get_config() -> Dict[str, Any]:
+    return {
+        "vpn_proxy_url": "http://192.168.178.29:8000",
+        "vpn_token": "CASTIFY_SECURE_TOKEN_2026",
+        "route_indian_channels": True
+    }
+
+SPOOF_HEADERS = {
+    "User-Agent": "VLC/3.0.18 LibVLC/3.0.18",
+    "Accept": "*/*",
+}
+
+@app.get("/api/stream")
+async def proxy_stream(url: str, token: str):
+    if token != "CASTIFY_SECURE_TOKEN_2026":
+        raise HTTPException(status_code=403, detail="Invalid secure token")
+        
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        try:
+            r = await client.get(url, headers=SPOOF_HEADERS, timeout=10.0)
+            if r.status_code >= 400:
+                raise HTTPException(status_code=r.status_code, detail="Remote playlist load failed")
+            
+            playlist_text = r.text
+            lines = playlist_text.splitlines()
+            rewritten_lines = []
+            base_url = url
+            
+            for line in lines:
+                line_str = line.strip()
+                if not line_str:
+                    rewritten_lines.append(line)
+                    continue
+                
+                if line_str.startswith("#"):
+                    if "URI=" in line_str:
+                        def repl(m):
+                            uri_val = m.group(1)
+                            absolute_uri = urljoin(base_url, uri_val)
+                            proxied_uri = f"/api/segment?url={quote(absolute_uri)}&token={token}"
+                            return f'URI="{proxied_uri}"'
+                        rewritten_tag = re.sub(r'URI="([^"]+)"', repl, line_str)
+                        rewritten_lines.append(rewritten_tag)
+                    else:
+                        rewritten_lines.append(line)
+                else:
+                    absolute_url = urljoin(base_url, line_str)
+                    is_playlist = ".m3u8" in absolute_url.lower()
+                    endpoint = "stream" if is_playlist else "segment"
+                    proxied_url = f"/api/{endpoint}?url={quote(absolute_url)}&token={token}"
+                    rewritten_lines.append(proxied_url)
+                    
+            content = "\n".join(rewritten_lines)
+            return Response(content=content, media_type="application/vnd.apple.mpegurl")
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Proxy error: {exc}")
+
+@app.get("/api/segment")
+async def proxy_segment(url: str, token: str):
+    if token != "CASTIFY_SECURE_TOKEN_2026":
+        raise HTTPException(status_code=403, detail="Invalid secure token")
+        
+    client = httpx.AsyncClient(follow_redirects=True)
+    
+    async def stream_generator():
+        try:
+            async with client.stream("GET", url, headers=SPOOF_HEADERS, timeout=15.0) as resp:
+                async for chunk in resp.iter_bytes(chunk_size=131072):
+                    yield chunk
+        finally:
+            await client.aclose()
+            
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as check_client:
+            head = await check_client.head(url, headers=SPOOF_HEADERS, timeout=5.0)
+            content_type = head.headers.get("content-type", "video/MP2T")
+    except Exception:
+        content_type = "video/MP2T"
+        
+    return StreamingResponse(stream_generator(), media_type=content_type)
+

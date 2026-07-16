@@ -187,9 +187,39 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             </View>
           </View>
 
-          {/* Hero Split-Screen: Banner (left) + Video (right) */}
+          {/* Cinematic Hero Panel (Video Background with overlaid Metadata) */}
           <View style={styles.topPanel}>
-            {/* Left: Metadata Banner */}
+            {/* 1. Live Video Stream Viewport (fills entire panel) */}
+            <View style={styles.playerContainer}>
+              {activeChannel ? (
+                <View style={styles.playerWrapper}>
+                  <VideoPlayer channel={activeChannel} />
+                  
+                  {/* Floating Fullscreen Control (bottom-right) */}
+                  <Pressable
+                    focusable={true}
+                    onFocus={() => setFullscreenBtnFocused(true)}
+                    onBlur={() => setFullscreenBtnFocused(false)}
+                    onPress={toggleFullscreen}
+                    style={[
+                      styles.controlButton,
+                      fullscreenBtnFocused && styles.controlButtonFocused,
+                    ]}
+                  >
+                    <Text style={styles.controlButtonText}>⛶ Fullscreen</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.noActiveStream}>
+                  <Text style={styles.noActiveStreamText}>No Stream Selected</Text>
+                  <Text style={styles.noActiveStreamSubtext}>
+                    Highlight a tile below and press OK to watch
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* 2. Overlaid Metadata Banner (bottom-left) */}
             <View style={styles.bannerContainer}>
               {bannerChannel ? (
                 <View style={styles.metaWrapper}>
@@ -244,39 +274,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 </View>
               ) : (
                 <View style={styles.emptyMetaWrapper}>
-                  <Text style={styles.emptyMetaTitle}>CastifyTV</Text>
+                  <Text style={styles.emptyMetaTitle}>Castify<Text style={{color: '#FFFFFF'}}>TV</Text></Text>
                   <Text style={styles.emptyMetaSubtitle}>
                     Load a playlist to start watching
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Right: Live Video Stream Viewport */}
-            <View style={styles.playerContainer}>
-              {activeChannel ? (
-                <View style={styles.playerWrapper}>
-                  <VideoPlayer channel={activeChannel} />
-                  
-                  {/* Floating Fullscreen Control (D-pad accessible) */}
-                  <Pressable
-                    focusable={true}
-                    onFocus={() => setFullscreenBtnFocused(true)}
-                    onBlur={() => setFullscreenBtnFocused(false)}
-                    onPress={toggleFullscreen}
-                    style={[
-                      styles.controlButton,
-                      fullscreenBtnFocused && styles.controlButtonFocused,
-                    ]}
-                  >
-                    <Text style={styles.controlButtonText}>⛶ Fullscreen</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={styles.noActiveStream}>
-                  <Text style={styles.noActiveStreamText}>No Stream Selected</Text>
-                  <Text style={styles.noActiveStreamSubtext}>
-                    Highlight a tile below and press OK to watch
                   </Text>
                 </View>
               )}
@@ -308,75 +308,90 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#141414', // Netflix deep charcoal
+    backgroundColor: '#1e2a35', // Dark navy/steel theme
   },
   dashboardContainer: {
     flex: 1,
   },
   
-  // ─── Top Navigation Bar (Netflix) ───
+  // ─── Top Navigation Bar ───
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
-    marginTop: 8, // Breathing room from the top edge of the screen
-    paddingHorizontal: 20,
-    backgroundColor: '#141414',
+    height: 48,
+    marginTop: 8,
+    paddingHorizontal: 24,
+    backgroundColor: '#1e2a35',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   navLogo: {
-    color: '#E50914', // Netflix Red
-    fontSize: 20,
+    color: '#bdd5ea', // Custom soft blue accent
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: 0,
+    letterSpacing: 0.5,
   },
   navLogoAccent: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '900',
   },
   navMenu: {
     flexDirection: 'row',
-    marginLeft: 32,
+    marginLeft: 36,
   },
   navItem: {
-    color: '#737373', // Netflix gray
-    fontSize: 14,
+    color: '#8a9aa8', // Soft slate gray
+    fontSize: 15,
     fontWeight: '600',
-    marginRight: 24,
+    marginRight: 28,
   },
   navItemActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
   
-  // ─── Hero Split-Screen ───
+  // ─── Cinematic Hero Panel ───
   topPanel: {
-    height: '28%',
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: '#0a0a0a',
+    height: '48%', // Cinematic sizing
+    position: 'relative',
+    backgroundColor: '#151f28',
+    overflow: 'hidden',
+  },
+  playerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000000',
+    zIndex: 1,
+  },
+  playerWrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
   bannerContainer: {
-    flex: 5, // 50%
-    justifyContent: 'center',
-    padding: 16,
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    width: '50%',
+    zIndex: 10,
   },
   metaWrapper: {
     justifyContent: 'center',
   },
   badgeRow: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   liveBadge: {
     backgroundColor: '#E50914',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 3,
-    marginRight: 6,
+    marginRight: 8,
   },
   liveBadgeText: {
     color: '#FFFFFF',
@@ -386,49 +401,59 @@ const styles = StyleSheet.create({
   },
   hdBadge: {
     borderWidth: 1,
-    borderColor: '#737373',
+    borderColor: '#b8c8d4',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 3,
   },
   hdBadgeText: {
-    color: '#737373',
+    color: '#b8c8d4',
     fontSize: 8,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
   bannerChannelName: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '900',
     marginBottom: 4,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 8,
   },
   bannerCategoryName: {
-    color: '#E50914',
-    fontSize: 11,
+    color: '#bdd5ea',
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 6,
-    letterSpacing: 0.3,
+    marginBottom: 8,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 6,
   },
   bannerDescription: {
-    color: '#737373',
-    fontSize: 11,
-    lineHeight: 15,
-    maxWidth: '90%',
-    marginBottom: 10,
+    color: '#e0e0e0',
+    fontSize: 12,
+    lineHeight: 16,
+    maxWidth: '95%',
+    marginBottom: 14,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 6,
   },
   bannerActions: {
     flexDirection: 'row',
     marginTop: 2,
   },
   actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 4,
-    marginRight: 8,
-    borderWidth: 0,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   actionButtonSecondary: {
     backgroundColor: 'rgba(109,109,110,0.5)',
@@ -440,65 +465,57 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   emptyMetaWrapper: {
     justifyContent: 'center',
   },
   emptyMetaTitle: {
-    color: '#E50914',
-
+    color: '#bdd5ea',
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 6,
   },
   emptyMetaSubtitle: {
-    color: '#737373',
-
-
+    color: '#b8c8d4',
     fontSize: 13,
     marginTop: 6,
-  },
-  playerContainer: {
-    flex: 5, // 50%
-    backgroundColor: '#000000',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.06)',
-  },
-  playerWrapper: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
   },
   noActiveStream: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#080808',
+    backgroundColor: '#151f28',
   },
   noActiveStreamText: {
-    color: '#737373',
+    color: '#8a9aa8',
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 6,
   },
   noActiveStreamSubtext: {
-    color: '#4B5563',
+    color: '#4a5a68',
     fontSize: 12,
     textAlign: 'center',
   },
   controlButton: {
     position: 'absolute',
-    bottom: 12,
-    right: 12,
-    paddingHorizontal: 14,
+    bottom: 24,
+    right: 24,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.25)',
     zIndex: 20,
   },
   controlButtonFocused: {
@@ -512,10 +529,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   
-  // ─── Netflix Category Rows ───
+  // ─── Category Rows ───
   bottomPanel: {
     flex: 1,
-    backgroundColor: '#141414',
+    backgroundColor: '#1e2a35',
   },
   bottomPanelContent: {
     paddingTop: 16,

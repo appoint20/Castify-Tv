@@ -92,13 +92,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   rowTitle: {
-    color: '#FFFFFF', // Netflix bright white
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
   rowCount: {
-    color: '#737373', // Netflix gray
+    color: '#8a9aa8',
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 10,

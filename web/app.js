@@ -52,6 +52,42 @@ const LS_FAVORITES = 'castifytv.favorites';
 const LS_HIDDEN    = 'castifytv.hidden';
 const LS_DEFAULTS_INIT = 'castifytv.defaults_initialized';
 
+// Secure Stream Proxy Server configuration (defaults/fallback)
+let PROXY_SERVER_URL = 'http://192.168.178.29:8000';
+let PROXY_TOKEN = 'CASTIFY_SECURE_TOKEN_2026';
+
+function shouldRouteThroughProxy(channel) {
+  if (!channel) return false;
+  var isHindi = channel.category === 'Hindi' || channel.category === 'hin';
+  var groupLower = (channel.group || '').toLowerCase();
+  var nameLower = (channel.name || '').toLowerCase();
+  var countryLower = (channel.country || '').toLowerCase();
+  
+  return isHindi 
+    || groupLower.indexOf('india') !== -1 
+    || groupLower.indexOf('hindi') !== -1
+    || nameLower.indexOf('india') !== -1 
+    || countryLower === 'in' 
+    || countryLower === 'india';
+}
+
+async function fetchProxyConfig() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const resp = await fetch(`${BACKEND_URL}/api/config`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.vpn_proxy_url) PROXY_SERVER_URL = data.vpn_proxy_url;
+      if (data.vpn_token) PROXY_TOKEN = data.vpn_token;
+      console.log('[CastifyTV] Loaded VPN proxy config from BE:', PROXY_SERVER_URL);
+    }
+  } catch (e) {
+    console.log('[CastifyTV] BE config fetch failed, using default VPN settings:', PROXY_SERVER_URL);
+  }
+}
+
 // Backend URL detection (browser preview only)
 const BACKEND_URL = (typeof window !== 'undefined' && window.__BACKEND_URL__)
   || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL)
@@ -128,10 +164,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function init() {
-  updateSplash('Contacting server…', '');
-  await detectBackend();
+  updateSplash('Loading channels…', '');
 
-  updateSplash('Downloading playlists…', '');
+  // Detect if we are on a TV (file:// protocol or webOS/Android TV user-agent)
+  const isTV = window.location.protocol === 'file:'
+    || navigator.userAgent.includes('Web0S')
+    || navigator.userAgent.includes('webOS')
+    || navigator.userAgent.includes('BRAVIA')
+    || navigator.userAgent.includes('SmartTV');
+
+  // Try backend only on non-TV environments (browser preview)
+  if (!isTV) {
+    await detectBackend();
+  }
+
+  // Fetch dynamic VPN config from backend if reachable
+  await fetchProxyConfig();
+
   const channels = await loadAllPlaylists();
 
   // Inject guaranteed seed channels (Music). Dedupe by URL/name.
@@ -156,15 +205,74 @@ async function init() {
     localStorage.setItem(LS_DEFAULTS_INIT, '1');
   }
 
-  updateSplash('Testing stream availability…', `Found ${channels.length} channels`);
-  await probeAllStreams(channels);
-
-  updateSplash('Almost ready…', '');
-  await sleep(200);
+  // ★ SKIP probing on TV — it takes forever due to CORS/timeout on every URL.
+  //   On TV, assume all channels are working. Dead ones can be skipped by user.
+  if (!isTV && state.isBackendAvailable) {
+    updateSplash('Testing stream availability…', `Found ${channels.length} channels`);
+    await probeAllStreams(channels);
+  } else {
+    // Mark all as working so they show up in the grid
+    channels.forEach(c => {
+      state.probedUrls.add(c.url);
+      state.workingUrls.add(c.url);
+    });
+  }
 
   showApp();
   render();
   autoplayStartupChannel();
+
+  // Pre-buffer favorite channel manifests in background for smoother switching
+  setTimeout(function() { prefetchFavorites(); }, 1500);
+}
+
+// Pre-fetch HLS manifests for favorite channels so switching feels instant
+function prefetchFavorites() {
+  var favs = [];
+  state.allChannels.forEach(function(c) {
+    if (state.favorites.has(c.url) && c.url && (!state.activeChannel || c.url !== state.activeChannel.url)) {
+      favs.push(c);
+    }
+  });
+  console.log('[CastifyTV] Pre-fetching ' + favs.length + ' favorite stream manifests...');
+  favs.forEach(function(c) {
+    prefetchUrl(c);
+  });
+}
+
+function prefetchUrl(c) {
+  if (!c || !c.url) return;
+  var playUrl = c.url;
+  if (shouldRouteThroughProxy(c)) {
+    playUrl = PROXY_SERVER_URL + '/api/stream?url=' + encodeURIComponent(c.url) + '&token=' + PROXY_TOKEN;
+  }
+  try {
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, 3500);
+    fetch(playUrl, { signal: controller.signal, mode: 'cors' })
+      .then(function() { clearTimeout(timer); })
+      .catch(function() { clearTimeout(timer); });
+  } catch (e) {}
+}
+
+function prefetchAdjacentChannels(channel) {
+  if (!channel) return;
+  var groups = computeGrouped();
+  var allVisible = [];
+  groups.forEach(function(g) {
+    g.channels.forEach(function(c) { allVisible.push(c); });
+  });
+  if (allVisible.length === 0) return;
+
+  var currentIdx = -1;
+  for (var i = 0; i < allVisible.length; i++) {
+    if (allVisible[i].url === channel.url) { currentIdx = i; break; }
+  }
+  if (currentIdx === -1) return;
+
+  // Prefetch neighbors (previous and next visible channels)
+  if (currentIdx > 0) prefetchUrl(allVisible[currentIdx - 1]);
+  if (currentIdx < allVisible.length - 1) prefetchUrl(allVisible[currentIdx + 1]);
 }
 
 // ═══ Splash helpers ═══
@@ -202,7 +310,7 @@ async function loadAllPlaylists() {
   for (const src of PLAYLISTS) {
     updateSplash(`Downloading ${src.category} channels…`, `${totalDone}/${PLAYLISTS.length} playlists loaded`);
     try {
-      const text = await fetchPlaylistText(src.url);
+      const text = await fetchPlaylistText(src.category, src.url);
       const parsed = parseM3U(text, src.category);
       for (const ch of parsed) {
         if (seenUrls.has(ch.url)) continue;
@@ -222,15 +330,41 @@ async function loadAllPlaylists() {
   return allChannels;
 }
 
-async function fetchPlaylistText(url) {
+async function fetchPlaylistText(category, url) {
+  const localFile = `${category.toLowerCase()}.m3u`;
+
+  // On TV (file:// protocol): load local bundled .m3u first — instant!
+  if (window.location.protocol === 'file:') {
+    try {
+      const resp = await fetch(localFile);
+      if (resp.ok) return await resp.text();
+    } catch (e) { /* fall through to remote */ }
+  }
+
+  // 1) Try backend proxy (browser preview)
   if (state.isBackendAvailable && BACKEND_URL) {
     try {
-      const resp = await fetch(`${BACKEND_URL}/api/playlist?url=${encodeURIComponent(url)}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const resp = await fetch(`${BACKEND_URL}/api/playlist?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+      clearTimeout(timer);
       if (resp.ok) return await resp.text();
     } catch (e) { /* fall through */ }
   }
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  // 2) Try direct fetch with a strict timeout
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (resp.ok) return await resp.text();
+  } catch (e) { /* fall through */ }
+
+  // 3) Local fallback (works on all TVs)
+  console.log(`[CastifyTV] Remote fetch failed for ${category}. Loading bundled local copy.`);
+  const resp = await fetch(localFile);
+  if (!resp.ok) throw new Error(`Failed to load local playlist: ${localFile}`);
   return resp.text();
 }
 
@@ -367,7 +501,6 @@ function computeGrouped() {
     const sorted = [...visible].sort((a, b) =>
       (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
     );
-    // Bucket by first letter (0-9 → "#")
     const buckets = {};
     sorted.forEach(c => {
       const first = (c.name || '?')[0].toUpperCase();
@@ -386,26 +519,34 @@ function computeGrouped() {
     }));
   }
 
-  // Apply top-nav filter (Home / Favorites / Category)
-  let filtered = visible;
+  // ── Favorites: show ONLY favorited channels grouped by category ──
   if (state.activeFilter === 'favorites') {
-    filtered = visible.filter(c => state.favorites.has(c.url));
-  } else if (state.activeFilter !== 'all') {
-    filtered = visible.filter(c => c.category === state.activeFilter);
+    const favChannels = visible.filter(c => state.favorites.has(c.url));
+    const catMap = {};
+    favChannels.forEach(c => {
+      const key = c.category || 'General';
+      (catMap[key] = catMap[key] || []).push(c);
+    });
+    return CATEGORY_ORDER
+      .filter(cat => catMap[cat])
+      .map(cat => ({ title: cat, channels: catMap[cat] }));
   }
 
-  // Favorites first (grouped by subcategory), then standard categories
-  const favChannels = filtered.filter(c => state.favorites.has(c.url));
-  const favMap = {};
-  favChannels.forEach(c => {
-    const key = `★ Favorites - ${c.category || 'General'}`;
-    (favMap[key] = favMap[key] || []).push(c);
-  });
-  const favGroups = Object.keys(favMap).sort().map(title => ({ title, channels: favMap[title] }));
+  // ── Specific category (Movies, Music, etc.): show ONLY that category ──
+  if (state.activeFilter !== 'all') {
+    const catChannels = visible.filter(c => c.category === state.activeFilter);
+    if (catChannels.length === 0) return [];
+    return [{ title: state.activeFilter, channels: catChannels }];
+  }
 
-  // Standard groups by category
+  // ── Home (all): favorites rail on top, then standard category rails ──
+  const favChannels = visible.filter(c => state.favorites.has(c.url));
+  const favGroups = favChannels.length > 0
+    ? [{ title: '★ My Favorites', channels: favChannels }]
+    : [];
+
   const stdMap = {};
-  filtered.forEach(c => {
+  visible.forEach(c => {
     const key = c.category || 'General';
     (stdMap[key] = stdMap[key] || []).push(c);
   });
@@ -482,7 +623,7 @@ function getInitials(name) {
   const clean = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
-  return (parts[0][0] + (parts[1][0] || '') + (parts[2]?.[0] || '')).toUpperCase();
+  return (parts[0][0] + (parts[1][0] || '') + (parts[2] ? parts[2][0] : '')).toUpperCase();
 }
 
 function renderCard(channel) {
@@ -568,9 +709,17 @@ function renderCard(channel) {
 // ═══════════════════════════════════════════════════════════════
 //  Banner (metadata + action buttons)
 // ═══════════════════════════════════════════════════════════════
+let prefetchDebounceTimer = null;
+
 function setFocusedChannel(ch) {
   state.focusedChannel = ch;
   updateBanner();
+
+  // Trigger smart adjacent channel preloading with a 500ms debounce
+  clearTimeout(prefetchDebounceTimer);
+  prefetchDebounceTimer = setTimeout(function() {
+    prefetchAdjacentChannels(ch);
+  }, 500);
 }
 
 function updateBanner() {
@@ -669,9 +818,15 @@ function playChannel(channel) {
   els.playerOverlay.classList.remove('hidden');
   els.playerStatus.textContent = `Connecting to ${channel.name}…`;
 
+  // Smart Routing Logic
+  var finalUrl = channel.url;
+  var useProxy = shouldRouteThroughProxy(channel);
+  if (useProxy) {
+    finalUrl = PROXY_SERVER_URL + '/api/stream?url=' + encodeURIComponent(channel.url) + '&token=' + PROXY_TOKEN;
+  }
+
   updateBanner();
   updateHintBar();
-  // Re-render rails so PLAYING badge moves to correct card
   render();
 
   const video = els.player;
@@ -688,7 +843,7 @@ function playChannel(channel) {
       lowLatencyMode: false,
       capLevelToPlayerSize: true
     });
-    state.hlsInstance.loadSource(channel.url);
+    state.hlsInstance.loadSource(finalUrl);
     state.hlsInstance.attachMedia(video);
     state.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
       video.play().catch(err => console.warn('Autoplay blocked:', err));
@@ -709,7 +864,7 @@ function playChannel(channel) {
       }
     });
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = channel.url;
+    video.src = finalUrl;
     video.play().catch(() => { els.playerStatus.textContent = 'Native playback failed.'; });
   } else {
     els.playerStatus.textContent = 'HLS not supported on this device.';
@@ -792,8 +947,8 @@ function setupEventListeners() {
 }
 
 function handleKeyDown(e) {
-  const key = e.key;
-  const code = e.keyCode;
+  var key = e.key;
+  var code = e.keyCode;
 
   // ── BACK (webOS 461, Samsung 10009, ESC) — contextual ──
   if (key === 'Escape' || code === 461 || code === 10009) {
@@ -814,7 +969,6 @@ function handleKeyDown(e) {
   if (code === 403) {
     e.preventDefault();
     toggleFavoriteActive();
-    flashHint('❤ Favorite toggled');
     return;
   }
   // GREEN (404) → toggle fullscreen
@@ -824,10 +978,51 @@ function handleKeyDown(e) {
     return;
   }
 
+  // ── Channel Up/Down (Next/Prev channel) ──
+  // PageUp(33) / ChannelUp(427) → next channel
+  // PageDown(34) / ChannelDown(428) → previous channel
+  if (code === 33 || code === 427) {
+    e.preventDefault();
+    switchChannel(1);
+    return;
+  }
+  if (code === 34 || code === 428) {
+    e.preventDefault();
+    switchChannel(-1);
+    return;
+  }
+
   // D-pad arrow keys — 2D navigation
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)) {
     handleDpad(key, e);
   }
+}
+
+// Switch to next (+1) or previous (-1) channel in the visible list
+function switchChannel(direction) {
+  var groups = computeGrouped();
+  var allVisible = [];
+  groups.forEach(function(g) {
+    g.channels.forEach(function(c) { allVisible.push(c); });
+  });
+  if (allVisible.length === 0) return;
+
+  if (!state.activeChannel) {
+    // Nothing playing, start the first channel
+    playChannel(allVisible[0]);
+    return;
+  }
+
+  var currentIdx = -1;
+  for (var i = 0; i < allVisible.length; i++) {
+    if (allVisible[i].url === state.activeChannel.url) { currentIdx = i; break; }
+  }
+  if (currentIdx === -1) { playChannel(allVisible[0]); return; }
+
+  var nextIdx = currentIdx + direction;
+  if (nextIdx < 0) nextIdx = allVisible.length - 1;
+  if (nextIdx >= allVisible.length) nextIdx = 0;
+  playChannel(allVisible[nextIdx]);
 }
 
 // Briefly flash a hint message on top of the hint bar
@@ -874,7 +1069,7 @@ function handleDpad(dir, event) {
 
   // Action buttons (banner): Left/Right between the two, Up back to nav, Down to first card, Right last -> fullscreen btn
   if (isAction && (active.classList.contains('action-btn'))) {
-    if (dir === 'ArrowUp') { event.preventDefault(); document.querySelector('.nav-item.active')?.focus() || document.querySelector('.nav-item').focus(); return; }
+    if (dir === 'ArrowUp') { event.preventDefault(); var navAct = document.querySelector('.nav-item.active'); if (navAct) navAct.focus(); else document.querySelector('.nav-item').focus(); return; }
     if (dir === 'ArrowDown') { event.preventDefault(); focusFirstCard(); return; }
     if (dir === 'ArrowLeft' && active.id === 'hide-btn') { event.preventDefault(); els.favBtn.focus(); return; }
     if (dir === 'ArrowRight' && active.id === 'fav-btn') { event.preventDefault(); els.hideBtn.focus(); return; }
@@ -885,7 +1080,7 @@ function handleDpad(dir, event) {
   // Fullscreen button
   if (active === els.fullscreenBtn) {
     if (dir === 'ArrowLeft') { event.preventDefault(); els.hideBtn.focus(); return; }
-    if (dir === 'ArrowUp')   { event.preventDefault(); document.querySelector('.nav-item.active')?.focus(); return; }
+    if (dir === 'ArrowUp')   { event.preventDefault(); var navEl = document.querySelector('.nav-item.active'); if (navEl) navEl.focus(); return; }
     if (dir === 'ArrowDown') { event.preventDefault(); focusFirstCard(); return; }
     return;
   }

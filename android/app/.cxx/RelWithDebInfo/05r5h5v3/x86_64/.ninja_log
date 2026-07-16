@@ -1,11 +1,12 @@
 # ninja log v5
-0	4	0	clean	b1d7e1365a7272a0
-2	705	1783696432892284673	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	759fd2e879591852
+1	5	0	clean	b1d7e1365a7272a0
+2	605	1784139084912596931	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	759fd2e879591852
+0	15	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/x86_64/CMakeFiles/cmake.verify_globs	d7020cbc95df9b64
+3	732	1784139085046604012	CMakeFiles/appmodules.dir/OnLoad.cpp.o	54815a97fb68cc68
+732	774	1784139085090700528	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/x86_64/libappmodules.so	fe93e1b4926ba01b
+6	49	1784139271172209896	build.ninja	404e3d660ede3453
+15	65	1784139271172209896	build.ninja	404e3d660ede3453
 0	7	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/x86_64/CMakeFiles/cmake.verify_globs	d7020cbc95df9b64
-2	848	1783696433034576168	CMakeFiles/appmodules.dir/OnLoad.cpp.o	54815a97fb68cc68
-848	894	1783696433082086168	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/x86_64/libappmodules.so	fe93e1b4926ba01b
-7	52	1783698232606848936	build.ninja	404e3d660ede3453
-1	7	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/x86_64/CMakeFiles/cmake.verify_globs	d7020cbc95df9b64
-2	672	1783698233312601889	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	759fd2e879591852
-3	826	1783698233466455376	CMakeFiles/appmodules.dir/OnLoad.cpp.o	54815a97fb68cc68
-826	878	1783698233518827853	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/x86_64/libappmodules.so	fe93e1b4926ba01b
+1	612	1784139271794810635	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	759fd2e879591852
+1	751	1784139271933718310	CMakeFiles/appmodules.dir/OnLoad.cpp.o	54815a97fb68cc68
+751	799	1784139271982004448	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/x86_64/libappmodules.so	fe93e1b4926ba01b

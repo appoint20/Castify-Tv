@@ -17,6 +17,22 @@ interface VideoPlayerProps {
   onStreamError?: (channel: Channel, error: string) => void;
 }
 
+const PROXY_SERVER_URL = 'http://192.168.178.29:8081';
+const PROXY_TOKEN = 'CASTIFY_SECURE_TOKEN_2026';
+
+function shouldRouteThroughProxy(channel: Channel): boolean {
+  if (!channel) return false;
+  const groupLower = (channel.group || '').toLowerCase();
+  const nameLower = (channel.name || '').toLowerCase();
+
+  return groupLower.includes('india')
+    || groupLower.includes('hindi')
+    || nameLower.includes('india')
+    || nameLower.includes('hindi')
+    || groupLower.includes('hin')
+    || nameLower.includes('hin ');
+}
+
 /**
  * `<VideoPlayer />` is a robust media playback container.
  * It integrates react-native-video (ExoPlayer) with granular state tracking,
@@ -39,9 +55,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Track button focus for the Error fallback UI D-pad navigation
   const [retryButtonFocused, setRetryButtonFocused] = useState(false);
 
+  const useProxy = shouldRouteThroughProxy(channel);
+  const finalUri = useProxy
+    ? `${PROXY_SERVER_URL}/api/stream?url=${encodeURIComponent(channel.url)}&token=${PROXY_TOKEN}`
+    : channel.url;
+
   // Monitor stream mount & teardown lifecycle
   useEffect(() => {
-    console.log(`[VideoPlayer] Mounted stream for channel: "${channel.name}"`);
+    console.log(`[VideoPlayer] Mounted stream for channel: "${channel.name}" (Proxied: ${useProxy})`);
     
     // Set initial loading state
     setPlayerState({
@@ -51,9 +72,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       isPaused: false,
     });
 
+    // Auto-timeout: if stream hasn't loaded in 10s, show error instead of hanging
+    const timeout = setTimeout(() => {
+      setPlayerState((prev) => {
+        if (prev.status === 'loading') {
+          console.warn(`[VideoPlayer] Stream timeout after 10s for: "${channel.name}"`);
+          return { ...prev, status: 'error', errorMessage: 'Connection timed out (10s)' };
+        }
+        return prev;
+      });
+    }, 10000);
+
     return () => {
-      // Critical cleanup: ensure the native decoder is fully released when navigating away.
-      // Setting state to idle triggers conditional unmounting in React Native.
+      clearTimeout(timeout);
       console.log(`[VideoPlayer] Unmounting stream and releasing decoder for: "${channel.name}"`);
     };
   }, [channel, retryKey]);
@@ -112,7 +143,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         <Video
           ref={videoRef}
           source={{
-            uri: channel.url,
+            uri: finalUri,
             headers: {
               'User-Agent': 'CastifyTV/1.0 (Android TV; ExoPlayer)',
             },
@@ -135,10 +166,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         />
       )}
 
+
+
       {/* Loading Overlay */}
       {playerState.status === 'loading' && (
         <View style={[StyleSheet.absoluteFill, styles.overlayContainer]}>
-          <ActivityIndicator size="large" color="#E50914" />
+          <ActivityIndicator size="large" color="#bdd5ea" />
           <Text style={styles.overlayText}>Connecting to Stream...</Text>
         </View>
       )}
@@ -146,7 +179,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* Buffering Overlay */}
       {playerState.status === 'buffering' && (
         <View style={[StyleSheet.absoluteFill, styles.overlayContainer, styles.transparentBg]}>
-          <ActivityIndicator size="large" color="#E50914" />
+          <ActivityIndicator size="large" color="#bdd5ea" />
           <Text style={styles.overlayText}>Buffering...</Text>
         </View>
       )}
@@ -197,7 +230,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   errorOverlay: {
-    backgroundColor: '#141414',
+    backgroundColor: '#1e2a35',
     padding: 24,
   },
   overlayText: {
@@ -208,7 +241,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   errorHeader: {
-    color: '#E50914', // Netflix Red
+    color: '#bdd5ea',
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 10,
@@ -236,14 +269,35 @@ const styles = StyleSheet.create({
     borderColor: '#404040',
   },
   retryButtonFocused: {
-    borderColor: '#E50914',
-    backgroundColor: '#E50914',
+    borderColor: '#bdd5ea',
+    backgroundColor: '#bdd5ea',
     transform: [{ scale: 1.05 }],
   },
   retryButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  secureRouteBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: '#1DB954',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+    zIndex: 100,
+    shadowColor: '#1DB954',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  secureRouteText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
     letterSpacing: 0.5,
   },
 });

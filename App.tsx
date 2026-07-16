@@ -12,6 +12,7 @@ import { MediaEngineProvider } from './src/hooks/useMediaEngine';
 import { parseM3UAsync, ParseProgress } from './src/parsers/m3uParser';
 import { Channel, ChannelGroup } from './src/types/iptv';
 import { MainLayout } from './src/components/MainLayout';
+import PRECOMPILED_CHANNELS from './src/channels.json';
 
 const { CastingModule } = NativeModules;
 
@@ -75,80 +76,8 @@ export default function App() {
   useEffect(() => {
     async function loadPlaylists() {
       try {
-        const allChannels: Channel[] = [];
-        let hasLoadedAny = false;
-
-        for (const playlist of PLAYLISTS) {
-          try {
-            console.log(`[App] Fetching playlist: ${playlist.name} from ${playlist.url}`);
-            
-            const response = await fetch(playlist.url);
-            if (!response.ok) {
-              throw new Error(`HTTP status ${response.status}`);
-            }
-            const content = await response.text();
-            
-            const parsed = await parseM3UAsync(
-              content,
-              () => {},
-              200 // Process in chunks of 200 to keep UI responsive
-            );
-            
-            // Annotate channels with their country origin and group title
-            const annotated = parsed.map(c => ({
-              ...c,
-              group: c.group && c.group !== 'Other' ? `${playlist.name} - ${c.group}` : `${playlist.name} - General`
-            }));
-            
-            allChannels.push(...annotated);
-            hasLoadedAny = true;
-          } catch (err) {
-            console.warn(`[App] Failed to load playlist ${playlist.name}:`, err);
-          }
-        }
-
-        // If all remote fetches failed (e.g. offline), use the mock fallback
-        if (!hasLoadedAny || allChannels.length === 0) {
-          console.log('[App] Offline or fetch failed, falling back to local playlist...');
-          const parsed = await parseM3UAsync(
-            MOCK_PLAYLIST,
-            () => {},
-            2
-          );
-          allChannels.push(...parsed);
-        }
-
-        // Inject guaranteed working channels for favorites
-        const injectedChannels: Channel[] = [
-          {
-            id: 'injected_9xm',
-            name: '9XM Music',
-            url: 'https://epiconvh.akamaized.net/live/9XM/master.m3u8',
-            group: 'Hindi - Music',
-            logo: 'https://static.wikia.nocookie.net/logopedia/images/4/4c/9XM_logo.png'
-          },
-          {
-            id: 'injected_zeemusic',
-            name: 'Zee Music',
-            url: 'https://f8e7y4c6.ssl.hwcdn.net/magic/playlist.m3u8',
-            group: 'Hindi - Music',
-            logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Zee_Music_Company_logo.png/320px-Zee_Music_Company_logo.png'
-          },
-          {
-            id: 'injected_b4umusic',
-            name: 'B4U Music',
-            url: 'https://cdnb4u.wiseplayout.com/B4U_Music/master.m3u8',
-            group: 'Hindi - Music',
-            logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a2/B4U_Music_logo.png'
-          }
-        ];
-
-        injectedChannels.forEach(chan => {
-          const exists = allChannels.some(c => c.url === chan.url || (c.name && c.name.toLowerCase() === chan.name.toLowerCase()));
-          if (!exists) {
-            allChannels.push(chan);
-          }
-        });
+        console.log('[App] Loading precompiled channels...');
+        const allChannels: Channel[] = PRECOMPILED_CHANNELS as Channel[];
 
         // Pre-populate default favorites on first launch
         if (CastingModule) {
@@ -255,8 +184,8 @@ export default function App() {
         {isParsing ? (
           // Clean loader screen: Spinner and App Title only
           <View style={styles.splashContainer}>
-            <ActivityIndicator size="large" color="#E50914" />
-            <Text style={styles.splashTitle}>CastifyTV</Text>
+            <ActivityIndicator size="large" color="#bdd5ea" />
+            <Text style={styles.splashTitle}>Castify<Text style={{color: '#FFFFFF'}}>TV</Text></Text>
           </View>
         ) : (
           // Main Smart TV coordinator layout
@@ -280,12 +209,12 @@ const styles = StyleSheet.create({
   },
   splashContainer: {
     flex: 1,
-    backgroundColor: '#141414',
+    backgroundColor: '#1e2a35',
     justifyContent: 'center',
     alignItems: 'center',
   },
   splashTitle: {
-    color: '#E5E7EB',
+    color: '#bdd5ea',
     fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 3,

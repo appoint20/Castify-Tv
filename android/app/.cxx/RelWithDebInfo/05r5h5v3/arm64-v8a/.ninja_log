@@ -1,11 +1,12 @@
 # ninja log v5
-0	4	0	clean	b1d7e1365a7272a0
-7	51	1783698228570294953	build.ninja	72b0e01f4968715
-1573	1698	1783696429051064192	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/arm64-v8a/libappmodules.so	daf9f1e7d0148b04
-0	7	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/arm64-v8a/CMakeFiles/cmake.verify_globs	91e653d528dc5946
-19	1387	1783696428737567369	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	77f162f79d35774
-19	1573	1783696428919322618	CMakeFiles/appmodules.dir/OnLoad.cpp.o	8578fb030ffdc877
-0	8	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/arm64-v8a/CMakeFiles/cmake.verify_globs	91e653d528dc5946
-22	895	1783698229506442196	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	77f162f79d35774
-22	1039	1783698229651076732	CMakeFiles/appmodules.dir/OnLoad.cpp.o	8578fb030ffdc877
-1039	1162	1783698229775619601	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/arm64-v8a/libappmodules.so	daf9f1e7d0148b04
+0	5	0	clean	b1d7e1365a7272a0
+23	82	1784139266369879837	build.ninja	72b0e01f4968715
+888	996	1784139081856574875	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/arm64-v8a/libappmodules.so	daf9f1e7d0148b04
+0	26	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/arm64-v8a/CMakeFiles/cmake.verify_globs	91e653d528dc5946
+1	736	1784139081597330258	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	77f162f79d35774
+1	888	1784139081747687236	CMakeFiles/appmodules.dir/OnLoad.cpp.o	8578fb030ffdc877
+26	90	1784139266369879837	build.ninja	72b0e01f4968715
+0	12	0	/Users/shivm/Workspace/Castify-Tv/android/app/.cxx/RelWithDebInfo/05r5h5v3/arm64-v8a/CMakeFiles/cmake.verify_globs	91e653d528dc5946
+2	971	1784139267361379013	CMakeFiles/appmodules.dir/Users/shivm/Workspace/Castify-Tv/android/app/build/generated/rncli/src/main/jni/rncli.cpp.o	77f162f79d35774
+2	1148	1784139267540381252	CMakeFiles/appmodules.dir/OnLoad.cpp.o	8578fb030ffdc877
+1148	1265	1784139267658413775	/Users/shivm/Workspace/Castify-Tv/android/app/build/intermediates/cxx/RelWithDebInfo/05r5h5v3/obj/arm64-v8a/libappmodules.so	daf9f1e7d0148b04

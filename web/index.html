@@ -4,26 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CastifyTV — Live TV, Smart TV Edition</title>
-  <meta name="theme-color" content="#141414">
+  <meta name="theme-color" content="#1e2a35">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.0.5">
 </head>
 <body>
   <!-- Splash / Loader (only on first boot) -->
   <div id="splash" class="splash">
     <div class="splash-logo">Castify<span>TV</span></div>
-    <div class="splash-spinner"></div>
-    <div id="splash-status" class="splash-status">Downloading playlists…</div>
-    <div id="splash-substatus" class="splash-substatus"></div>
+    <div class="splash-loading-box">
+      <div class="splash-spinner"></div>
+      <div class="splash-text-container">
+        <div id="splash-status" class="splash-status">Loading channels…</div>
+        <div id="splash-substatus" class="splash-substatus"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Main App -->
   <div id="app" class="app hidden">
 
-    <!-- ─── Top Navigation Bar (Netflix / Castify style) ─── -->
+    <!-- ─── Top Navigation Bar (Netflix style, bigger + centered) ─── -->
     <header id="topbar" class="navbar" data-testid="navbar">
       <div class="nav-logo" data-testid="brand-logo">
         Castify<span class="nav-logo-accent">TV</span>
@@ -37,75 +41,77 @@
       </nav>
     </header>
 
-    <!-- ─── Split Hero: Banner (left) + Live Video (right) ─── -->
-    <section class="top-panel" data-testid="top-panel">
+    <!-- ─── Cinematic Hero: Full-width video bg + metadata overlay ─── -->
+    <section class="hero" id="hero-panel" data-testid="hero-panel">
 
-      <!-- LEFT: Metadata Banner -->
-      <div class="banner-container" data-testid="banner-container">
-        <div id="banner-meta" class="meta-wrapper">
-          <div class="badge-row">
-            <div class="live-badge" data-testid="live-badge">● LIVE</div>
-            <div class="hd-badge">FHD 1080P</div>
-          </div>
-          <h1 id="banner-name" class="banner-name" data-testid="banner-channel-name">CastifyTV</h1>
-          <div id="banner-category" class="banner-category" data-testid="banner-category">Loading channels…</div>
-          <p id="banner-desc" class="banner-desc">
-            Now playing live broadcast. Use the D-Pad to browse channels below and press OK to watch.
-          </p>
+      <!-- Video background (fills entire hero) -->
+      <div class="hero-video-bg" id="player-wrapper">
+        <video
+          id="player"
+          playsinline
+          autoplay
+          muted
+          data-testid="video-player"
+        ></video>
 
-          <div class="banner-actions">
-            <button
-              id="fav-btn"
-              class="action-btn"
-              data-testid="favorite-btn"
-              tabindex="0"
-            >
-              <span id="fav-btn-text">+ My Favorites</span>
-            </button>
-            <button
-              id="hide-btn"
-              class="action-btn action-btn-secondary"
-              data-testid="hide-btn"
-              tabindex="0"
-            >✕ Hide Channel</button>
-          </div>
+        <!-- Buffering overlay -->
+        <div id="player-overlay" class="player-overlay">
+          <div class="spinner"></div>
+          <p id="player-status">Connecting to stream…</p>
         </div>
       </div>
 
-      <!-- RIGHT: Live Video Stream Viewport -->
-      <div class="player-container" data-testid="player-container">
-        <div id="player-wrapper" class="player-wrapper">
-          <video
-            id="player"
-            playsinline
-            autoplay
-            muted
-            data-testid="video-player"
-          ></video>
+      <!-- No stream placeholder -->
+      <div id="no-active-stream" class="no-active-stream hidden">
+        <div class="no-active-stream-text">No Stream Selected</div>
+        <div class="no-active-stream-subtext">Highlight a tile below and press OK to watch</div>
+      </div>
 
-          <!-- Buffering overlay -->
-          <div id="player-overlay" class="player-overlay">
-            <div class="spinner"></div>
-            <p id="player-status">Connecting to stream…</p>
-          </div>
+      <!-- Gradient overlays for text legibility -->
+      <div class="hero-gradient-bottom"></div>
+      <div class="hero-gradient-top"></div>
 
-          <!-- Floating Fullscreen Button -->
+      <!-- Metadata (bottom-left, Netflix style) -->
+      <div class="hero-meta" id="banner-meta">
+        <div class="badge-row">
+          <div class="live-badge" data-testid="live-badge">● LIVE</div>
+          <div class="hd-badge">FHD 1080P</div>
+        </div>
+        <h1 id="banner-name" class="banner-name" data-testid="banner-channel-name">CastifyTV</h1>
+        <div id="banner-category" class="banner-category" data-testid="banner-category">Loading channels…</div>
+        <p id="banner-desc" class="banner-desc">
+          Now playing live broadcast. Use the D-Pad to browse channels below and press OK to watch.
+        </p>
+
+        <div class="banner-actions">
           <button
-            id="fullscreen-btn"
-            class="control-button"
-            data-testid="fullscreen-btn"
+            id="fav-btn"
+            class="action-btn"
+            data-testid="favorite-btn"
             tabindex="0"
-          >⛶ Fullscreen</button>
-        </div>
-
-        <div id="no-active-stream" class="no-active-stream hidden">
-          <div class="no-active-stream-text">No Stream Selected</div>
-          <div class="no-active-stream-subtext">Highlight a tile below and press OK to watch</div>
+          >
+            <span id="fav-btn-text">+ My Favorites</span>
+          </button>
+          <button
+            id="hide-btn"
+            class="action-btn action-btn-secondary"
+            data-testid="hide-btn"
+            tabindex="0"
+          >✕ Hide Channel</button>
         </div>
       </div>
+
+      <!-- Floating Fullscreen Button (bottom-right) -->
+      <button
+        id="fullscreen-btn"
+        class="control-button"
+        data-testid="fullscreen-btn"
+        tabindex="0"
+      >⛶ Fullscreen</button>
+
     </section>
 
-    <!-- ─── Category Rails (Netflix style poster cards) ─── -->
+    <!-- ─── Category Rails (Netflix poster cards) ─── -->
     <main id="rails" class="rails" data-testid="rails-container"></main>
 
     <!-- Empty state -->
@@ -121,14 +127,8 @@
     <div class="fullscreen-hint">Press BACK on your remote to exit Fullscreen</div>
   </div>
 
-  <!-- ─── Persistent Back / Remote hint bar (LG Magic Remote) ─── -->
-  <div id="hint-bar" class="hint-bar" data-testid="hint-bar">
-    <div class="hint-item"><kbd class="key-glyph key-back">◀</kbd><span>BACK</span><span class="hint-desc" id="hint-back-desc">Stop stream</span></div>
-    <div class="hint-item"><kbd class="key-glyph key-red">●</kbd><span>RED</span><span class="hint-desc">Toggle Favorite</span></div>
-    <div class="hint-item"><kbd class="key-glyph key-green">●</kbd><span>GREEN</span><span class="hint-desc">Fullscreen</span></div>
-    <div class="hint-item"><kbd class="key-glyph">OK</kbd><span class="hint-desc">Play channel</span></div>
-  </div>
 
-  <script src="app.js"></script>
+
+  <script src="app.js?v=1.0.5"></script>
 </body>
 </html>
